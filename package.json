@@ -5,6 +5,11 @@
   "engines": {
     "node": ">=22.12.0 <23"
   },
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "4.15.9"
+    }
+  },
   "//node": "firebase-admin -> jose is ESM-only. Node 22.11 needs --experimental-require-module; it is default from 22.12, so drop the NODE_OPTIONS below after upgrading.",
   "scripts": {
     "dev": "NODE_OPTIONS=\"--experimental-require-module --disable-warning=ExperimentalWarning\" next dev",
