@@ -1,0 +1,50 @@
+{
+  "name": "skylar-hr-coreimersive",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.11"
+  },
+  "//node": "firebase-admin -> jose is ESM-only. Node 22.11 needs --experimental-require-module; it is default from 22.12, so drop the NODE_OPTIONS below after upgrading.",
+  "scripts": {
+    "dev": "NODE_OPTIONS=\"--experimental-require-module --disable-warning=ExperimentalWarning\" next dev",
+    "build": "NODE_OPTIONS=\"--experimental-require-module --disable-warning=ExperimentalWarning\" next build",
+    "start": "NODE_OPTIONS=\"--experimental-require-module --disable-warning=ExperimentalWarning\" next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
+    "@hookform/resolvers": "^5.9.1",
+    "@sentry/nextjs": "^10.75.1",
+    "@tanstack/react-query": "^5.103.2",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.4.0",
+    "lucide-react": "^1.47.0",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-hook-form": "^7.88.0",
+    "resend": "^6.28.1",
+    "server-only": "^0.0.1",
+    "stripe": "^22.6.2",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.6.5",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  }
+}
