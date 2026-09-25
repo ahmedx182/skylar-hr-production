@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.11"
+    "node": ">=22.12.0 <23"
   },
   "//node": "firebase-admin -> jose is ESM-only. Node 22.11 needs --experimental-require-module; it is default from 22.12, so drop the NODE_OPTIONS below after upgrading.",
   "scripts": {
