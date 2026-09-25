@@ -15,9 +15,11 @@ export function CopyEmailButton({ email }: { email: string | null }) {
     );
   }
 
+  const address = email;
+
   async function copyEmail() {
     try {
-      await navigator.clipboard.writeText(email);
+      await navigator.clipboard.writeText(address);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -30,7 +32,7 @@ export function CopyEmailButton({ email }: { email: string | null }) {
       type="button"
       onClick={copyEmail}
       title={copied ? "Email copied" : "Copy work email"}
-      aria-label={copied ? "Email copied" : `Copy work email ${email}`}
+      aria-label={copied ? "Email copied" : `Copy work email ${address}`}
       className="group inline-flex min-w-0 max-w-full items-center gap-2 text-left text-sm transition-colors hover:text-sun"
     >
       {copied ? (
@@ -39,7 +41,7 @@ export function CopyEmailButton({ email }: { email: string | null }) {
         <Mail className="size-4 shrink-0 text-sun/90" aria-hidden="true" />
       )}
       <span className="break-all font-semibold text-paper group-hover:text-sun">
-        {email}
+        {address}
       </span>
       <Copy className="size-3.5 shrink-0 text-paper-3 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
     </button>
