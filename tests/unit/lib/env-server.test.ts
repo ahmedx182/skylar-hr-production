@@ -52,4 +52,65 @@ describe("getServerEnv", () => {
     expect(() => getServerEnv()).toThrow(/FIREBASE_PROJECT_ID|too small/i);
     expect(() => getServerEnv()).not.toThrow(/super-secret-key/);
   });
+
+  it("uses safe defaults for AI limits and prompt caching", async () => {
+    stubEnv();
+    const getServerEnv = await loadGetServerEnv();
+
+    expect(getServerEnv()).toMatchObject({
+      AI_MAX_OUTPUT_TOKENS: 600,
+      AI_RATE_LIMIT_MAX_REQUESTS: 20,
+      AI_RATE_LIMIT_WINDOW_MS: 60_000,
+      AI_RESPONSE_CACHE_TTL_MS: 300_000,
+      ANTHROPIC_PROMPT_CACHE_TTL: "5m",
+    });
+  });
+
+  it("parses configured AI limits", async () => {
+    stubEnv({
+      AI_MAX_OUTPUT_TOKENS: "800",
+      AI_RATE_LIMIT_MAX_REQUESTS: "8",
+      AI_RATE_LIMIT_WINDOW_MS: "30000",
+      AI_RESPONSE_CACHE_TTL_MS: "120000",
+      ANTHROPIC_PROMPT_CACHE_TTL: "1h",
+    });
+    const getServerEnv = await loadGetServerEnv();
+
+    expect(getServerEnv()).toMatchObject({
+      AI_MAX_OUTPUT_TOKENS: 800,
+      AI_RATE_LIMIT_MAX_REQUESTS: 8,
+      AI_RATE_LIMIT_WINDOW_MS: 30_000,
+      AI_RESPONSE_CACHE_TTL_MS: 120_000,
+      ANTHROPIC_PROMPT_CACHE_TTL: "1h",
+    });
+  });
+
+  it("parses signup allowed domains from a comma-separated list", async () => {
+    stubEnv({ SIGNUP_ALLOWED_DOMAINS: " artilence.com, Example.COM ,, " });
+    const getServerEnv = await loadGetServerEnv();
+
+    expect(getServerEnv().SIGNUP_ALLOWED_DOMAINS).toEqual(["artilence.com", "example.com"]);
+  });
+
+  it("keeps Stripe settings optional for local builds", async () => {
+    stubEnv({
+      STRIPE_SECRET_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
+      STRIPE_PRICE_ID: "",
+      RESEND_API_KEY: "",
+      SKYLAR_TEAM_EMAIL: "",
+      RESEND_FROM_EMAIL: "",
+    });
+    const getServerEnv = await loadGetServerEnv();
+
+    expect(getServerEnv()).toMatchObject({
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+      STRIPE_SECRET_KEY: undefined,
+      STRIPE_WEBHOOK_SECRET: undefined,
+      STRIPE_PRICE_ID: undefined,
+      RESEND_API_KEY: undefined,
+      SKYLAR_TEAM_EMAIL: undefined,
+      RESEND_FROM_EMAIL: undefined,
+    });
+  });
 });

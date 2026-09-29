@@ -46,6 +46,12 @@ export class ExternalServiceError extends AppError {
   }
 }
 
+export class RateLimitError extends AppError {
+  constructor(message = "Too many requests. Try again shortly.", options?: ErrorOptions) {
+    super("rate_limited", 429, message, options);
+  }
+}
+
 export interface ErrorResponse {
   status: number;
   body: { error: { code: string; message: string } };

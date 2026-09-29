@@ -7,3 +7,6 @@ export const PEOPLE_PATH = "/people";
 export const NEW_PERSON_PATH = "/people/new";
 export const DOCUMENTS_PATH = "/documents";
 export const NEW_NOTE_PATH = "/notes/new";
+export const ADVISOR_PATH = "/advisor";
+export const BILLING_PATH = "/billing";
+export const SETTINGS_PATH = "/settings";

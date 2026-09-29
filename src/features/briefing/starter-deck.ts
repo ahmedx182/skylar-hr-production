@@ -28,8 +28,8 @@ export function getStarterBriefingDeck(
               ? "risk"
               : "attention",
         actions: [
-          { label: "Prepare conversation", tone: "attention" },
-          { label: "Skip for today" },
+          { label: "Prepare conversation", kind: "prepare", tone: "attention" },
+          { label: "Skip for today", kind: "not_now" },
         ],
       },
       clearCard(session, records),
@@ -51,8 +51,8 @@ export function getStarterBriefingDeck(
         dueLabel: "Open",
         tone: "neutral",
         actions: [
-          { label: "Open file" },
-          { label: "Add note" },
+          { label: "Open file", kind: "open_file" },
+          { label: "Add note", kind: "add_note" },
         ],
       },
       clearCard(session, records),
@@ -75,6 +75,6 @@ function clearCard(
     subject: session.companyId,
     dueLabel: "Clear",
     tone: "neutral",
-    actions: [{ label: "Finish" }],
+    actions: [{ label: "Finish", kind: "finish" }],
   };
 }

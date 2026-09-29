@@ -44,16 +44,21 @@ export function CreateRecordPage({
   mode,
   role,
   employees = [],
+  initialEmployeeId = "",
 }: {
   mode: CreateMode;
   role: Role;
   employees?: EmployeeOption[];
+  initialEmployeeId?: string;
 }) {
   const [state, setState] = useState<CreateActionState | null>(null);
+  const [personStep, setPersonStep] = useState(1);
   const [isPending, startTransition] = useTransition();
   const canCreate = role === "admin";
   const page = content[mode];
   const Icon = canCreate ? page.icon : Lock;
+  const isPersonFlow = mode === "person";
+  const personProgress = `${personStep}/4`;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,11 +90,27 @@ export function CreateRecordPage({
         }
 
         setState(result);
-        if (result.ok) form.reset();
+        if (result.ok) {
+          form.reset();
+          if (mode === "person") setPersonStep(1);
+        }
       } catch {
         setState({ ok: false, message: "Skylar could not save this yet. Try again." });
       }
     });
+  }
+
+  function advancePersonStep(form: HTMLFormElement | null) {
+    if (!form) return;
+    if (personStep === 1) {
+      const formData = new FormData(form);
+      if (!String(formData.get("name") ?? "").trim() || !String(formData.get("email") ?? "").trim()) {
+        setState({ ok: false, message: "Add the employee name and work email before continuing." });
+        return;
+      }
+    }
+    setState(null);
+    setPersonStep((current) => Math.min(4, current + 1));
   }
 
   return (
@@ -124,11 +145,35 @@ export function CreateRecordPage({
             </div>
           )}
 
+          {isPersonFlow && (
+            <div className="mb-6">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="font-mono text-xs uppercase text-ink/45">Add person flow</p>
+                  <p className="mt-1 text-sm font-semibold text-ink">
+                    {personStepTitle(personStep)}
+                  </p>
+                </div>
+                <p className="font-mono text-xs uppercase text-ink/45">{personProgress}</p>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink/10">
+                <div
+                  className="h-full rounded-full bg-ink transition-[width] duration-300"
+                  style={{ width: `${(personStep / 4) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-4">
             {mode === "person" ? (
-              <PersonFields disabled={!canCreate || isPending} />
+              <PersonFields disabled={!canCreate || isPending} step={personStep} />
             ) : (
-              <NoteFields disabled={!canCreate || isPending} employees={employees} />
+              <NoteFields
+                disabled={!canCreate || isPending}
+                employees={employees}
+                initialEmployeeId={initialEmployeeId}
+              />
             )}
           </div>
 
@@ -141,13 +186,49 @@ export function CreateRecordPage({
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={!canCreate || isPending}
-            className="mt-6 h-12 w-full rounded-xl bg-ink px-4 font-semibold text-paper transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40 md:w-auto md:min-w-52"
-          >
-            {isPending ? "Saving..." : mode === "person" ? "Create person" : "Save note"}
-          </button>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            {isPersonFlow && personStep > 1 && (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => setPersonStep((current) => Math.max(1, current - 1))}
+                className="h-12 px-2 text-sm font-semibold text-ink/55 transition-colors hover:text-ink disabled:opacity-40"
+              >
+                Back
+              </button>
+            )}
+            {isPersonFlow && personStep < 4 && (
+              <>
+                {personStep > 1 && (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => setPersonStep((current) => Math.min(4, current + 1))}
+                    className="h-12 px-2 text-sm font-semibold text-ink/45 transition-colors hover:text-ink disabled:opacity-40"
+                  >
+                    Skip
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={!canCreate || isPending}
+                  onClick={(event) => advancePersonStep(event.currentTarget.form)}
+                  className="h-12 w-full rounded-xl bg-ink px-4 font-semibold text-paper transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40 md:w-auto md:min-w-52"
+                >
+                  Continue
+                </button>
+              </>
+            )}
+            {(!isPersonFlow || personStep === 4) && (
+              <button
+                type="submit"
+                disabled={!canCreate || isPending}
+                className="h-12 w-full rounded-xl bg-ink px-4 font-semibold text-paper transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40 md:w-auto md:min-w-52"
+              >
+                {isPending ? "Saving..." : mode === "person" ? "Create person" : "Save note"}
+              </button>
+            )}
+          </div>
         </form>
 
         <aside className="grid min-h-[420px] place-items-center rounded-[24px] bg-paper/[0.06] p-5">
@@ -174,46 +255,78 @@ export function CreateRecordPage({
   );
 }
 
-function PersonFields({ disabled }: { disabled: boolean }) {
+function personStepTitle(step: number): string {
+  if (step === 1) return "Start with the required basics.";
+  if (step === 2) return "Add role context, or skip it.";
+  if (step === 3) return "Add an opening summary, or skip it.";
+  return "Review and create the employee file.";
+}
+
+function PersonFields({ disabled, step }: { disabled: boolean; step: number }) {
   return (
     <>
-      <CreateInput name="name" label="Employee name" placeholder="Maya Chen" disabled={disabled} required />
-      <CreateInput
-        name="email"
-        label="Work email"
-        placeholder="maya@company.com"
-        type="email"
-        disabled={disabled}
-        required
-      />
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="grid gap-2 text-sm font-semibold text-ink/65">
-          Role
-          <select
-            name="jobTitle"
-            defaultValue=""
-            disabled={disabled}
-            className="h-12 rounded-xl border border-ink/10 bg-ink/[0.04] px-3 text-ink outline-none disabled:opacity-50"
-          >
-            <option value="" disabled>
-              Select role
-            </option>
-            <option value="Customer Success Lead">Customer Success Lead</option>
-            <option value="Operations Manager">Operations Manager</option>
-            <option value="Product Designer">Product Designer</option>
-            <option value="Sales Manager">Sales Manager</option>
-            <option value="People Operations">People Operations</option>
-            <option value="Other">Other</option>
-          </select>
-        </label>
-        <CreateInput name="location" label="Location" placeholder="Remote, Lahore, Austin..." disabled={disabled} />
+      <div className={step === 1 ? "grid gap-4" : "hidden"}>
+        <CreateInput name="name" label="Employee name" placeholder="Maya Chen" disabled={disabled} required />
+        <CreateInput
+          name="email"
+          label="Work email"
+          placeholder="maya@company.com"
+          type="email"
+          disabled={disabled}
+          required
+        />
+        <p className="rounded-2xl bg-ink/[0.04] px-4 py-3 text-sm leading-6 text-ink/55">
+          These two fields are required. Everything after this can be skipped and filled in later from the employee profile.
+        </p>
       </div>
-      <CreateTextarea
-        name="summary"
-        label="Opening summary"
-        placeholder="Short context that should live on the file."
-        disabled={disabled}
-      />
+
+      <div className={step === 2 ? "grid gap-4" : "hidden"}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-2 text-sm font-semibold text-ink/65">
+            Role
+            <select
+              name="jobTitle"
+              defaultValue=""
+              disabled={disabled}
+              className="h-12 rounded-xl border border-ink/10 bg-ink/[0.04] px-3 text-ink outline-none disabled:opacity-50"
+            >
+              <option value="">Unknown for now</option>
+              <option value="Customer Success Lead">Customer Success Lead</option>
+              <option value="Operations Manager">Operations Manager</option>
+              <option value="Product Designer">Product Designer</option>
+              <option value="Sales Manager">Sales Manager</option>
+              <option value="People Operations">People Operations</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <CreateInput name="location" label="Location" placeholder="Remote, Lahore, Austin..." disabled={disabled} />
+        </div>
+        <p className="rounded-2xl bg-ink/[0.04] px-4 py-3 text-sm leading-6 text-ink/55">
+          Role and location help Skylar ground future conversations, but they are optional.
+        </p>
+      </div>
+
+      <div className={step === 3 ? "grid gap-4" : "hidden"}>
+        <CreateTextarea
+          name="summary"
+          label="Opening summary"
+          placeholder="Short context that should live on the file."
+          disabled={disabled}
+        />
+        <p className="rounded-2xl bg-ink/[0.04] px-4 py-3 text-sm leading-6 text-ink/55">
+          Keep this factual and short. You can skip it if there is no useful context yet.
+        </p>
+      </div>
+
+      <div className={step === 4 ? "grid gap-4" : "hidden"}>
+        <div className="rounded-2xl bg-ink/[0.04] px-4 py-4">
+          <p className="font-mono text-xs uppercase text-ink/45">Ready to create</p>
+          <p className="mt-2 text-lg font-semibold text-ink">Skylar will create the employee file now.</p>
+          <p className="mt-2 text-sm leading-6 text-ink/55">
+            After creation, you can add notes, open advisor chat, or edit profile details anytime.
+          </p>
+        </div>
+      </div>
     </>
   );
 }
@@ -221,12 +334,15 @@ function PersonFields({ disabled }: { disabled: boolean }) {
 function NoteFields({
   disabled,
   employees,
+  initialEmployeeId = "",
 }: {
   disabled: boolean;
   employees: EmployeeOption[];
+  initialEmployeeId?: string;
 }) {
-  const [query, setQuery] = useState("");
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const initialEmployee = employees.find((employee) => employee.id === initialEmployeeId);
+  const [query, setQuery] = useState(initialEmployee?.name ?? "");
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialEmployee?.id ?? "");
   const [isSearching, setIsSearching] = useState(false);
   const filteredEmployees = useMemo(() => {
     const normalized = query.trim().toLowerCase();

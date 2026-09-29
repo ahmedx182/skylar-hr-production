@@ -1,7 +1,12 @@
 import "server-only";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type QueryDocumentSnapshot, type Transaction } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
+import {
+  buildEmployeeMemorySummary,
+  type EmployeeMemoryLedgerItem,
+} from "@/features/briefing/employee-memory-summary";
+import { classifyLedgerRisk } from "@/features/briefing/risk-classification";
 import type {
   CreateEmployeeInput,
   CreateNoteInput,
@@ -13,6 +18,47 @@ import type { AuthSession } from "@/types/auth";
 const EMPLOYEES_COLLECTION = "employees";
 const LEDGER_COLLECTION = "employee_ledger_entries";
 const USERS_COLLECTION = "users";
+const COMPANIES_COLLECTION = "companies";
+
+function employeeCode(number: number): string {
+  return `EMP-${String(number).padStart(3, "0")}`;
+}
+
+async function assertUniqueEmployeeEmail(
+  companyId: string,
+  email: string,
+  exceptEmployeeId?: string,
+): Promise<void> {
+  const snapshot = await adminDb()
+    .collection(EMPLOYEES_COLLECTION)
+    .where("companyId", "==", companyId)
+    .where("email", "==", email)
+    .limit(2)
+    .get();
+
+  const duplicate = snapshot.docs.find((doc) => doc.id !== exceptEmployeeId);
+  if (duplicate) {
+    throw new ConflictError("An employee with this work email already exists.");
+  }
+}
+
+async function nextEmployeeCode(transaction: Transaction, companyId: string): Promise<string> {
+  const companyRef = adminDb().collection(COMPANIES_COLLECTION).doc(companyId);
+  const companySnapshot = await transaction.get(companyRef);
+  const rawNext = companySnapshot.exists ? companySnapshot.get("nextEmployeeNumber") : undefined;
+  const nextNumber = Number.isInteger(rawNext) && rawNext > 0 ? rawNext : 1;
+
+  transaction.set(
+    companyRef,
+    {
+      nextEmployeeNumber: nextNumber + 1,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return employeeCode(nextNumber);
+}
 
 async function workspaceUserIdForEmail(email: string, displayName: string): Promise<string> {
   const auth = adminAuth();
@@ -34,28 +80,34 @@ async function workspaceUserIdForEmail(email: string, displayName: string): Prom
 export async function createEmployeeRecord(
   session: AuthSession,
   input: CreateEmployeeInput,
-): Promise<{ id: string }> {
+): Promise<{ id: string; employeeCode: string }> {
   const now = FieldValue.serverTimestamp();
-  const ref = adminDb().collection(EMPLOYEES_COLLECTION).doc();
+  const db = adminDb();
+  await assertUniqueEmployeeEmail(session.companyId, input.email);
+  const ref = db.collection(EMPLOYEES_COLLECTION).doc();
   const userId = await workspaceUserIdForEmail(input.email, input.name);
-  const userRef = adminDb().collection(USERS_COLLECTION).doc(userId);
+  const userRef = db.collection(USERS_COLLECTION).doc(userId);
   const userSnapshot = await userRef.get();
-
-  await ref.set({
-    companyId: session.companyId,
-    name: input.name,
-    email: input.email,
-    jobTitle: input.jobTitle || null,
-    location: input.location || null,
-    summary: input.summary
-      ? {
-          text: input.summary,
-          updatedAt: now,
-        }
-      : null,
-    createdAt: now,
-    updatedAt: now,
-    createdBy: session.uid,
+  const code = await db.runTransaction(async (transaction) => {
+    const nextCode = await nextEmployeeCode(transaction, session.companyId);
+    transaction.set(ref, {
+      companyId: session.companyId,
+      employeeCode: nextCode,
+      name: input.name,
+      email: input.email,
+      jobTitle: input.jobTitle || null,
+      location: input.location || null,
+      summary: input.summary
+        ? {
+            text: input.summary,
+            updatedAt: now,
+          }
+        : null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: session.uid,
+    });
+    return nextCode;
   });
 
   if (userSnapshot.exists) {
@@ -78,7 +130,7 @@ export async function createEmployeeRecord(
     });
   }
 
-  return { id: ref.id };
+  return { id: ref.id, employeeCode: code };
 }
 
 async function upsertWorkspaceUser(session: AuthSession, email: string, displayName: string) {
@@ -108,6 +160,34 @@ async function upsertWorkspaceUser(session: AuthSession, email: string, displayN
   });
 }
 
+function ledgerItemFromDoc(doc: QueryDocumentSnapshot): EmployeeMemoryLedgerItem {
+  const statusDot = doc.get("statusDot");
+  return {
+    type: String(doc.get("type") ?? "note"),
+    description: String(doc.get("description") ?? ""),
+    statusDot: statusDot === "amber" || statusDot === "green" || statusDot === "red" ? statusDot : null,
+    dateMs: timestampMs(doc.get("date")) || timestampMs(doc.get("createdAt")),
+  };
+}
+
+async function employeeLedgerSummary(
+  companyId: string,
+  employeeId: string,
+  overrides: EmployeeMemoryLedgerItem[] = [],
+  omittedLedgerEntryId?: string,
+): Promise<string | null> {
+  const snapshot = await adminDb()
+    .collection(LEDGER_COLLECTION)
+    .where("companyId", "==", companyId)
+    .where("employeeId", "==", employeeId)
+    .get();
+  const items = snapshot.docs
+    .filter((doc) => doc.id !== omittedLedgerEntryId)
+    .map(ledgerItemFromDoc);
+
+  return buildEmployeeMemorySummary([...items, ...overrides]);
+}
+
 export async function updateEmployeeRecord(
   session: AuthSession,
   input: UpdateEmployeeInput,
@@ -119,6 +199,9 @@ export async function updateEmployeeRecord(
 
   if (!snapshot.exists || snapshot.get("companyId") !== session.companyId) {
     throw new NotFoundError("Employee not found.");
+  }
+  if (input.email) {
+    await assertUniqueEmployeeEmail(session.companyId, input.email, input.employeeId);
   }
 
   await ref.update({
@@ -151,7 +234,16 @@ export async function createEmployeeNoteRecord(
   const db = adminDb();
   const employeeRef = db.collection(EMPLOYEES_COLLECTION).doc(input.employeeId);
   const ledgerRef = db.collection(LEDGER_COLLECTION).doc();
-  const statusDot = input.statusDot === "none" ? null : input.statusDot;
+  const risk = classifyLedgerRisk(input.note);
+  const statusDot = risk.isHighRisk ? "red" : input.statusDot === "none" ? null : input.statusDot;
+  const summary = await employeeLedgerSummary(session.companyId, input.employeeId, [
+    {
+      type: "note",
+      description: input.note,
+      statusDot,
+      dateMs: Date.now(),
+    },
+  ]);
   const employeeSnapshot = await employeeRef.get();
 
   if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId) {
@@ -161,7 +253,7 @@ export async function createEmployeeNoteRecord(
   const batch = db.batch();
   batch.update(employeeRef, {
     summary: {
-      text: input.note,
+      text: summary,
       updatedAt: now,
     },
     updatedAt: now,
@@ -173,6 +265,7 @@ export async function createEmployeeNoteRecord(
     date: now,
     description: input.note,
     statusDot,
+    riskReason: risk.reason,
     reference: null,
     conversationId: null,
     documentId: null,
@@ -205,16 +298,31 @@ export async function updateEmployeeNoteRecord(
   }
 
   const now = FieldValue.serverTimestamp();
-  const statusDot = input.statusDot === "none" ? null : input.statusDot;
+  const risk = classifyLedgerRisk(input.note);
+  const statusDot = risk.isHighRisk ? "red" : input.statusDot === "none" ? null : input.statusDot;
+  const summary = await employeeLedgerSummary(
+    session.companyId,
+    employeeId,
+    [
+      {
+        type: String(noteSnapshot.get("type") ?? "note"),
+        description: input.note,
+        statusDot,
+        dateMs: Date.now(),
+      },
+    ],
+    input.ledgerEntryId,
+  );
   const batch = db.batch();
   batch.update(noteRef, {
     description: input.note,
     statusDot,
+    riskReason: risk.reason,
     updatedAt: now,
     updatedBy: session.uid,
   });
   batch.update(employeeRef, {
-    summary: { text: input.note, updatedAt: now },
+    summary: summary ? { text: summary, updatedAt: now } : null,
     updatedAt: now,
   });
   await batch.commit();
@@ -241,18 +349,11 @@ export async function deleteEmployeeNoteRecord(
     throw new NotFoundError("Employee not found.");
   }
 
-  const remaining = await db
-    .collection(LEDGER_COLLECTION)
-    .where("companyId", "==", session.companyId)
-    .where("employeeId", "==", employeeId)
-    .get();
-  const nextNote = remaining.docs
-    .filter((doc) => doc.id !== ledgerEntryId)
-    .sort((a, b) => timestampMs(b.get("date")) - timestampMs(a.get("date")))[0];
+  const summary = await employeeLedgerSummary(session.companyId, employeeId, [], ledgerEntryId);
   const batch = db.batch();
   batch.delete(noteRef);
   batch.update(employeeRef, {
-    summary: nextNote ? { text: String(nextNote.get("description") ?? ""), updatedAt: FieldValue.serverTimestamp() } : null,
+    summary: summary ? { text: summary, updatedAt: FieldValue.serverTimestamp() } : null,
     updatedAt: FieldValue.serverTimestamp(),
   });
   await batch.commit();

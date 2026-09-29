@@ -6,7 +6,11 @@ import { listCompanyEmployees } from "@/server/repositories/briefing-read.reposi
 
 export const metadata: Metadata = { title: "New Note" };
 
-export default async function NewNotePage() {
+export default async function NewNotePage({
+  searchParams,
+}: {
+  searchParams?: { employeeId?: string };
+}) {
   const session = await requirePageSession();
   const employees = await listCompanyEmployees(session.companyId);
 
@@ -15,10 +19,11 @@ export default async function NewNotePage() {
       <CreateRecordPage
         mode="note"
         role={session.role}
+        initialEmployeeId={searchParams?.employeeId}
         employees={employees.map((employee) => ({
           id: employee.id,
           name: employee.name,
-          detail: employee.jobTitle ?? employee.location ?? "Employee file",
+          detail: [employee.employeeCode, employee.jobTitle ?? employee.location].filter(Boolean).join(" · ") || "Employee file",
         }))}
       />
     </BriefingRoomFrame>

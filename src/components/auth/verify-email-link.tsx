@@ -5,8 +5,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EmailForm } from "@/components/auth/email-form";
 import { focusRing } from "@/components/ui/focus-ring";
-import { BRIEFING_PATH, LOGIN_PATH } from "@/constants/routes";
-import { clearMagicEmail, readMagicEmail } from "@/features/auth/magic-email";
+import { BRIEFING_PATH, LOGIN_PATH, ONBOARDING_PATH } from "@/constants/routes";
+import {
+  clearMagicEmail,
+  clearPendingSignup,
+  readMagicEmail,
+  readPendingSignup,
+} from "@/features/auth/magic-email";
 import { createServerSession } from "@/features/auth/session-client";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { cn } from "@/lib/utils/cn";
@@ -18,14 +23,19 @@ export function VerifyEmailLink() {
   const started = useRef(false);
 
   const completeSignIn = useCallback(async (email: string) => {
-    const auth = getFirebaseAuth();
-    setPhase("verifying");
+      const auth = getFirebaseAuth();
+      setPhase("verifying");
     try {
       const { user } = await signInWithEmailLink(auth, email, window.location.href);
-      await createServerSession(await user.getIdToken());
+      const pendingSignup = readPendingSignup(email);
+      await createServerSession(
+        await user.getIdToken(),
+        pendingSignup ? { companyName: pendingSignup.companyName } : undefined,
+      );
       clearMagicEmail();
+      clearPendingSignup();
       // Hard navigation: a soft one could reuse a router-cached, signed-out render.
-      window.location.replace(BRIEFING_PATH);
+      window.location.replace(pendingSignup ? ONBOARDING_PATH : BRIEFING_PATH);
     } catch {
       setPhase("failed");
     } finally {

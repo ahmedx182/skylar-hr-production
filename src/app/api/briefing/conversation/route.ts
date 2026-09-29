@@ -1,61 +1,89 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { ExternalServiceError, toErrorResponse } from "@/lib/errors";
+import { AppError, ExternalServiceError, toErrorResponse, ValidationError } from "@/lib/errors";
 import { getServerEnv } from "@/lib/env/server";
+import { assertWithinRateLimit } from "@/server/ai/rate-limit";
+import { streamSkylarConversation } from "@/server/ai/skylar-conversation";
 import { requireSession } from "@/server/auth/require-session";
+import { parseJsonBody } from "@/server/http/parse-json-body";
+import {
+  appendSkylarConversationTurn,
+  listSkylarConversationMessages,
+} from "@/server/repositories/skylar-conversation.repository";
 
 const conversationInputSchema = z.object({
   prompt: z.string().trim().min(3).max(1200),
+  employeeId: z.string().trim().max(120).optional(),
   employeeName: z.string().trim().max(120).optional(),
   cardTitle: z.string().trim().max(240).optional(),
   cardBody: z.string().trim().max(1200).optional(),
 });
 
-const systemPrompt = `You are Skylar, a calm HR briefing assistant. Help a people manager prepare for a fair, human conversation. Keep responses practical and concise. Do not give legal advice, diagnose people, or recommend punitive action. Ask one useful follow-up question when context is missing. Use plain language and never mention being an AI.`;
+const conversationQuerySchema = z.object({
+  employeeId: z.string().trim().max(120).optional(),
+  employeeName: z.string().trim().max(120).optional(),
+  cardTitle: z.string().trim().max(240).optional(),
+  cardBody: z.string().trim().max(1200).optional(),
+});
+
+function conversationError(error: unknown) {
+  if (error instanceof AppError) return error;
+  const message = error instanceof Error ? error.message : "";
+  if (/authentication_error|api key is invalid|401/i.test(message)) {
+    return new ExternalServiceError("Skylar is not connected. Check ANTHROPIC_API_KEY and restart the server.");
+  }
+  console.error("Skylar conversation failed", error);
+  return new ExternalServiceError("Skylar could not reach the conversation service. Try again.");
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireSession();
+    const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());
+    const parsed = conversationQuerySchema.safeParse(searchParams);
+    if (!parsed.success) throw new ValidationError("Invalid saved conversation context.");
+    const context = parsed.data;
+    const messages = await listSkylarConversationMessages(session, context);
+
+    return Response.json({ messages });
+  } catch (error) {
+    const response = toErrorResponse(conversationError(error));
+    return Response.json(response.body, { status: response.status });
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const env = getServerEnv();
 
-    if (!env.ANTHROPIC_API_KEY) {
-      throw new ExternalServiceError("Skylar is not connected yet. Add ANTHROPIC_API_KEY to enable conversation help.");
-    }
-
-    const input = conversationInputSchema.parse(await request.json());
-    const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-    const stream = await anthropic.messages.create({
-      model: env.ANTHROPIC_MODEL,
-      max_tokens: 600,
-      stream: true,
-      system: systemPrompt,
-      messages: [
-        {
-          role: "user",
-          content: [
-            `Employee: ${input.employeeName || "Not specified"}`,
-            `Briefing focus: ${input.cardTitle || "Not specified"}`,
-            `Existing context: ${input.cardBody || "Not specified"}`,
-            `Manager request: ${input.prompt}`,
-          ].join("\n\n"),
-        },
-      ],
+    const input = await parseJsonBody(request, conversationInputSchema);
+    assertWithinRateLimit({
+      key: `${session.companyId}:${session.uid}:briefing-conversation`,
+      maxRequests: env.AI_RATE_LIMIT_MAX_REQUESTS,
+      windowMs: env.AI_RATE_LIMIT_WINDOW_MS,
+    });
+    const history = await listSkylarConversationMessages(session, input);
+    const stream = await streamSkylarConversation(env, { ...input, history }).catch((error: unknown) => {
+      throw conversationError(error);
     });
 
     const encoder = new TextEncoder();
     const body = new ReadableStream({
       async start(controller) {
+        let assistantText = "";
         try {
-          for await (const event of stream) {
-            if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`));
-            }
+          for await (const text of stream) {
+            assistantText += text;
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+          }
+          if (assistantText.trim()) {
+            await appendSkylarConversationTurn(session, input, input.prompt, assistantText);
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (error) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: toErrorResponse(error).body.error.message })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: toErrorResponse(conversationError(error)).body.error.message })}\n\n`));
           controller.close();
         }
       },
@@ -63,13 +91,13 @@ export async function POST(request: NextRequest) {
 
     return new Response(body, {
       headers: {
-        "Cache-Control": "no-cache, no-transform",
+        "Cache-Control": "no-cache, no-store, no-transform",
         Connection: "keep-alive",
         "Content-Type": "text/event-stream; charset=utf-8",
       },
     });
   } catch (error) {
-    const response = toErrorResponse(error);
+    const response = toErrorResponse(conversationError(error));
     return Response.json(response.body, { status: response.status });
   }
 }

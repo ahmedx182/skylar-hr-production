@@ -23,6 +23,7 @@ export function EditNoteActions({
   const [draft, setDraft] = useState(description);
   const [status, setStatus] = useState<NoteStatus>(statusDot);
   const [error, setError] = useState("");
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function save() {
@@ -39,7 +40,6 @@ export function EditNoteActions({
   }
 
   function remove() {
-    if (!window.confirm("Delete this saved note? This cannot be undone.")) return;
     setError("");
     startTransition(async () => {
       const result = await deleteNoteAction(noteId);
@@ -87,14 +87,42 @@ export function EditNoteActions({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 pt-5">
-      <button type="button" onClick={() => setIsEditing(true)} className="inline-flex h-10 items-center gap-2 border border-ink/15 px-4 text-sm font-semibold text-ink transition-colors hover:bg-ink/[0.04]">
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <button type="button" onClick={() => setIsEditing(true)} className="inline-flex h-9 items-center gap-2 rounded-full border border-ink/10 bg-ink/[0.035] px-3 text-xs font-semibold text-ink/70 transition-colors hover:bg-ink hover:text-paper">
         <Pencil className="size-4" aria-hidden="true" /> Edit note
       </button>
-      <button type="button" onClick={remove} disabled={isPending} className="inline-flex h-10 items-center gap-2 px-3 text-sm font-semibold text-risk transition-colors hover:bg-risk/[0.08] disabled:opacity-50">
+      <button type="button" onClick={() => setIsConfirmingDelete(true)} disabled={isPending} className="inline-flex h-9 items-center gap-2 rounded-full border border-risk/15 bg-risk/[0.06] px-3 text-xs font-semibold text-risk transition-colors hover:bg-risk hover:text-paper disabled:opacity-50">
         <Trash2 className="size-4" aria-hidden="true" /> Delete note
       </button>
       {error && <p role="alert" className="basis-full text-sm font-semibold text-risk">{error}</p>}
+      {isConfirmingDelete && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/70 px-4">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-note-title" className="w-full max-w-sm rounded-2xl bg-paper px-5 py-5 text-ink shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <p id="delete-note-title" className="text-lg font-semibold">Delete this note?</p>
+            <p className="mt-2 text-sm leading-6 text-ink/60">
+              This removes the saved ledger entry from the employee history. This cannot be undone.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(false)}
+                disabled={isPending}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-ink/10 px-4 text-sm font-semibold text-ink/65 transition-colors hover:bg-ink/[0.05] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={remove}
+                disabled={isPending}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-risk px-4 text-sm font-semibold text-paper transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {isPending ? "Deleting..." : "Delete note"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

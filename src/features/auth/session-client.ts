@@ -1,10 +1,13 @@
 /** Browser calls to the session endpoints. The server cookie is the only session; nothing is stored here. */
 
-export async function createServerSession(idToken: string): Promise<void> {
+export async function createServerSession(
+  idToken: string,
+  signup?: { companyName: string },
+): Promise<void> {
   const response = await fetch("/api/auth/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken }),
+    body: JSON.stringify({ idToken, signup }),
   });
   if (!response.ok) throw new Error(`Session request failed (${response.status})`);
 }

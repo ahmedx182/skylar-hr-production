@@ -1,9 +1,12 @@
 "use client";
 
 import { Building2, CheckCircle2, LogOut, Settings } from "lucide-react";
+import Link from "next/link";
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { SETTINGS_PATH } from "@/constants/routes";
+import { companyDisplayName } from "@/lib/company-display-name";
 import type { AuthSession } from "@/types/auth";
 
 function initials(email: string | null) {
@@ -17,6 +20,7 @@ export function AccountMenu({ session }: { session: AuthSession }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [position, setPosition] = useState({ top: 72, right: 24 });
+  const workspaceName = companyDisplayName(session);
 
   useLayoutEffect(() => {
     setIsMounted(true);
@@ -110,7 +114,7 @@ export function AccountMenu({ session }: { session: AuthSession }) {
             <Building2 className="size-4 text-paper-3" aria-hidden="true" />
             <div className="min-w-0">
               <p className="text-xs text-paper-3">Workspace</p>
-              <p className="truncate font-semibold text-paper">{session.companyId}</p>
+              <p className="truncate font-semibold text-paper">{workspaceName}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-lg px-2 py-2">
@@ -120,13 +124,14 @@ export function AccountMenu({ session }: { session: AuthSession }) {
               <p className="font-semibold text-paper">Secure</p>
             </div>
           </div>
-          <button
-            type="button"
+          <Link
+            href={SETTINGS_PATH}
+            onClick={() => setIsOpen(false)}
             className="flex items-center gap-3 rounded-lg px-2 py-2 text-left text-paper-2 transition-colors hover:bg-paper/[0.06] hover:text-paper"
           >
             <Settings className="size-4" aria-hidden="true" />
             <span className="text-sm font-semibold">Account settings</span>
-          </button>
+          </Link>
         </div>
 
         <div className="pt-2">

@@ -68,6 +68,36 @@
     }
   }
 
+  @keyframes skylar-card-next {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(18px) scale(0.97) rotate(-0.4deg);
+    }
+  }
+
+  @keyframes skylar-card-rise {
+    0% {
+      opacity: 1;
+      transform: translateY(28px) scale(0.975);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+  }
+
+  .skylar-card-next {
+    animation: skylar-card-next 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .skylar-card-rise {
+    animation: skylar-card-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     @keyframes skylar-route-enter {
       0% {
@@ -132,6 +162,65 @@
 
     .skylar-shimmer::after {
       animation: skylar-shimmer 3.6s ease-in-out infinite;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skylar-card-next,
+    .skylar-card-rise {
+      animation: none;
+    }
+  }
+
+  @media print {
+    html {
+      color-scheme: light;
+    }
+
+    body {
+      background: #ffffff !important;
+      color: #111111 !important;
+    }
+
+    .skylar-app-header,
+    .skylar-sidebar,
+    .skylar-shimmer,
+    .skylar-page-content button,
+    .skylar-page-content a[href^="/notes/new"],
+    .skylar-page-content a[href="/people"] {
+      display: none !important;
+    }
+
+    .skylar-page-content {
+      animation: none !important;
+    }
+
+    .skylar-page-content * {
+      animation: none !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+    }
+
+    .skylar-page-content,
+    .skylar-page-content section,
+    .skylar-page-content div,
+    .skylar-page-content article {
+      background: #ffffff !important;
+      color: #111111 !important;
+      border-color: #d8d4cc !important;
+    }
+
+    .skylar-page-content p,
+    .skylar-page-content span,
+    .skylar-page-content h1,
+    .skylar-page-content h2,
+    .skylar-page-content h3 {
+      color: #111111 !important;
+    }
+
+    .skylar-page-content a {
+      color: #111111 !important;
+      text-decoration: none !important;
     }
   }
 }

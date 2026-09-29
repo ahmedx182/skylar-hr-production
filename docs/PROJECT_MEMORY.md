@@ -1,6 +1,6 @@
 # Skylar Project Memory
 
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-28
 
 This file is the short working memory for the current repository. The seven
 copied project documents in this folder remain the detailed product,
@@ -54,6 +54,9 @@ current code. Advisor and company administration roles remain future decisions.
   cannot replace the remaining beats with the normal Briefing page.
 - Live-in-5 beat 2 creates the employee through the server action, and beat 5
   saves the first real ledger note through the server action.
+- Task 4 is implemented as approved-domain signup, not public signup: a new
+  company and first admin user can be created only when the work email domain is
+  listed in `SIGNUP_ALLOWED_DOMAINS`.
 - Employee profile metadata: copied work email, state, last updated date,
   role, and location.
 - Unit and integration test foundation for auth, schemas, guards, and errors.
@@ -64,7 +67,8 @@ current code. Advisor and company administration roles remain future decisions.
 - `ahmed.fayyaz@artilence.com` is the admin account.
 - Employee creation, profile updates, and note creation are admin-only and
   enforced on the server.
-- Only provisioned active email addresses may request a sign-in link.
+- Existing users must be provisioned and active before requesting a sign-in
+  link; new-company signup is separately restricted by approved domains.
 - Employee notes belong in the unified employee ledger.
 - Documents are ledger records, not a separate document-vault product.
 - The floating Ask Skylar surface remains a future assistant surface; the
@@ -95,25 +99,25 @@ current code. Advisor and company administration roles remain future decisions.
 
 ## Remaining Product Work
 
-### Next implementation task
+### Task 3 status: implemented
 
 **Task 3: Build the real Daily Briefing deck and card actions.**
 
-- Add server-side `/api/briefing/today` ordering by urgency and due date.
-- Make `Prepare`, `Next`, and `Not now` actions functional.
-- Persist deferred items until the next day.
-- Drive the “What&apos;s ahead” sidebar from the same server-owned deck.
-- Replace remaining starter briefing copy with real Firestore-backed state.
+- Server-side `/api/briefing/today` orders Firestore-backed cards by urgency and
+  due date.
+- `Prepare`, `Next`, and `Not now` are functional card actions.
+- `Next` persists the current-day action and animates the current card down as
+  the next card rises from underneath, like a physical stack of cards.
+- `Not now` persists the card until the next day.
+- The “What&apos;s ahead” sidebar uses the same server-owned deck.
+- Starter briefing copy has been replaced with real employee and ledger state.
 
 ### Highest priority
 
-- Add company creation during signup and connect the flow to a new workspace,
-  rather than only starting it for an existing empty admin workspace.
-- Integrate Anthropic Claude with streaming responses.
+- Finish Task 4 by backing the Marcus/Priya/Tom prototype situations with
+  durable records and persisting advisor escalation.
 - Build real conversation cards, clarifying questions, plans, and transcripts.
-- Create server-side Briefing ordering and `/api/briefing/today`.
-- Persist `NEXT` and `NOT NOW` behavior, including defer-to-tomorrow logic.
-- Connect Ask Skylar to a real assistant backend.
+- Connect the floating Ask Skylar action to the real assistant backend.
 
 ### Employee memory and risk
 
@@ -143,9 +147,9 @@ current code. Advisor and company administration roles remain future decisions.
 ## Verification State
 
 `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` pass after
-the Task 2 integration.
+the Task 3 Daily Briefing deck implementation.
 
-Current test result: 8 test files and 55 tests passing.
+Current test result: 10 test files and 63 tests passing.
 
 ## Source Documents
 

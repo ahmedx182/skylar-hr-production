@@ -10,8 +10,8 @@ import { parseJsonBody } from "@/server/http/parse-json-body";
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
-    const { idToken } = await parseJsonBody(request, sessionRequestSchema);
-    const { cookie, maxAgeMs } = await createSession(idToken);
+    const { idToken, signup } = await parseJsonBody(request, sessionRequestSchema);
+    const { cookie, maxAgeMs } = await createSession(idToken, signup);
 
     const response = NextResponse.json({ ok: true });
     response.cookies.set(SESSION_COOKIE_NAME, cookie, sessionCookieOptions(maxAgeMs));
