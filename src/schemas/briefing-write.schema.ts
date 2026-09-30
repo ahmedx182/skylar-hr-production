@@ -38,6 +38,17 @@ export const updateEmployeeSchema = z.object({
   summary: z.string().trim().max(500).optional(),
 });
 
+export const updateNoteSchema = z.object({
+  ledgerEntryId: z.string().trim().min(1),
+  note: z.string().trim().min(8).max(1000),
+  statusDot: z.enum(["amber", "green", "red", "none"]).default("amber"),
+});
+
+export const recordIdSchema = z.object({
+  id: z.string().trim().min(1),
+});
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type CreateNoteInput = z.infer<typeof createNoteSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+export type UpdateNoteInput = z.infer<typeof updateNoteSchema>;

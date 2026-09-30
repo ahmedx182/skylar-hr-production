@@ -22,8 +22,11 @@ The current build includes:
 - Account menu, logout, quick actions, and the Ask Skylar interaction surface.
 - Top-of-page loading progress and lightweight transitions without blur effects.
 
-Advanced AI-generated guidance, advisor escalation, billing, and full onboarding
-are planned extensions and are not yet implemented.
+The first Claude conversation slice is implemented behind the briefing card's
+Prepare conversation action. Add `ANTHROPIC_API_KEY` to enable it; without the
+key, the app shows a clear setup message and keeps the rest of the briefing
+usable. Advisor escalation, billing, and the remaining conversation workflow
+are planned extensions.
 
 ## Stack
 
@@ -51,8 +54,8 @@ npm install
 ```
 
 Create `.env.local` from `.env.example` and provide the Firebase client and
-server credentials. Optional provider values are reserved for future AI,
-billing, email, and monitoring integrations.
+server credentials. Add `ANTHROPIC_API_KEY` when enabling Skylar conversation
+help; `ANTHROPIC_MODEL` defaults to `claude-haiku-4-5-20251001`.
 
 Run the development server on port 3000:
 
@@ -84,6 +87,9 @@ npm test
 | `/documents` | Saved ledger records |
 | `/documents/[documentId]` | Saved record detail |
 | `/notes/new` | New note flow |
+
+The protected conversation endpoint is `/api/briefing/conversation` and
+returns a server-side Claude response as a text stream.
 
 ## Architecture Notes
 

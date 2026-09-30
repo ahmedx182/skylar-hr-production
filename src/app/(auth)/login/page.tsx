@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
-import { BRIEFING_PATH } from "@/constants/routes";
+import { BRIEFING_PATH, PRIVACY_PATH, TERMS_PATH } from "@/constants/routes";
 import { getSession } from "@/server/auth/get-session";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -126,6 +127,15 @@ export default async function LoginPage() {
               <p className="mt-2 leading-6">Your browser only receives the secure session cookie.</p>
             </div>
           </div>
+
+          <nav className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-paper-3">
+            <Link href={TERMS_PATH} className="transition-colors hover:text-paper">
+              Terms
+            </Link>
+            <Link href={PRIVACY_PATH} className="transition-colors hover:text-paper">
+              Privacy
+            </Link>
+          </nav>
         </div>
       </section>
     </div>

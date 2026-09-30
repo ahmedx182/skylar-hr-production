@@ -12,5 +12,6 @@ export interface AuthSession {
   uid: string;
   email: string | null;
   companyId: string;
+  companyName?: string | null;
   role: Role;
 }

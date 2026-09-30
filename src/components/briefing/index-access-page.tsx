@@ -3,9 +3,10 @@ import Link from "next/link";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import type { IndexSection } from "@/components/briefing/briefing-index-nav";
 import { SectionHero } from "@/components/briefing/section-hero";
+import { resumeDeferredCardAction } from "@/features/briefing/deferred-actions";
 import type { AuthSession } from "@/types/auth";
 
-type PageKey = Exclude<IndexSection, "Today">;
+type PageKey = Exclude<IndexSection, "Today" | "Advisor" | "Billing" | "Settings">;
 export type IndexAccessItem = {
   label: string;
   title: string;
@@ -13,6 +14,7 @@ export type IndexAccessItem = {
   meta: string;
   href?: string;
   actionLabel?: string;
+  cardId?: string;
 };
 
 const pageContent: Record<
@@ -89,6 +91,7 @@ export function IndexAccessPage({
             <div className="mt-4 grid gap-3">
               {items.length ? (
                 items.map((item) => {
+                  const canResume = active === "Deferred" && Boolean(item.cardId);
                   const className =
                     "group grid gap-4 rounded-[14px] bg-paper/[0.045] px-4 py-4 text-left shadow-[inset_0_0_0_1px_rgba(244,239,231,0.035),inset_0_1px_0_rgba(244,239,231,0.04)] transition-colors md:grid-cols-[minmax(0,1fr)_170px] md:items-center";
                   const contentNode = (
@@ -105,16 +108,47 @@ export function IndexAccessPage({
                         <p className="mt-3 font-semibold text-paper">{item.title}</p>
                         <p className="mt-1 line-clamp-2 text-sm leading-6 text-paper-2">{item.body}</p>
                       </div>
-                      <div className="flex items-center justify-start md:justify-end">
-                        {item.href && (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-paper/[0.08] px-3 py-2 text-xs font-semibold text-paper-2 transition-colors group-hover:bg-paper group-hover:text-ink">
+                      <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
+                        {item.href && canResume && (
+                          <Link
+                            href={item.href}
+                            className="inline-flex h-9 items-center gap-2 rounded-full bg-paper/[0.08] px-3 text-xs font-semibold text-paper-2 transition-colors hover:bg-paper hover:text-ink"
+                          >
+                            {item.actionLabel ?? "Open"}
+                            <ArrowRight className="size-3.5" aria-hidden="true" />
+                          </Link>
+                        )}
+                        {item.href && !canResume && (
+                          <span className="inline-flex h-9 items-center gap-2 rounded-full bg-paper/[0.08] px-3 text-xs font-semibold text-paper-2 transition-colors group-hover:bg-paper group-hover:text-ink">
                             {item.actionLabel ?? "Open"}
                             <ArrowRight className="size-3.5" aria-hidden="true" />
                           </span>
                         )}
+                        {canResume && (
+                          <form action={resumeDeferredCardAction}>
+                            <input type="hidden" name="cardId" value={item.cardId} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-9 items-center justify-center rounded-full bg-paper px-3 text-xs font-semibold text-ink transition-opacity hover:opacity-90"
+                            >
+                              Resume today
+                            </button>
+                          </form>
+                        )}
                       </div>
                     </>
                   );
+
+                  if (canResume) {
+                    return (
+                      <div
+                        key={`${item.cardId}-${item.label}-${item.title}-${item.meta}`}
+                        className={className}
+                      >
+                        {contentNode}
+                      </div>
+                    );
+                  }
 
                   return item.href ? (
                     <Link

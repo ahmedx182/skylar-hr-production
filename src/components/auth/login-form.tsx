@@ -4,7 +4,7 @@ import { sendSignInLinkToEmail } from "firebase/auth";
 import { useState } from "react";
 import { EmailForm } from "@/components/auth/email-form";
 import { VERIFY_PATH } from "@/constants/routes";
-import { saveMagicEmail } from "@/features/auth/magic-email";
+import { clearPendingSignup, saveMagicEmail } from "@/features/auth/magic-email";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 
 type Status =
@@ -72,6 +72,7 @@ export function LoginForm() {
       setStatus({ phase: "failed", message: authErrorMessage(error) });
       return;
     }
+    clearPendingSignup();
     saveMagicEmail(email);
     setStatus({ phase: "sent", email });
   }
@@ -90,7 +91,7 @@ export function LoginForm() {
 
   return (
     <>
-      <EmailForm submitLabel="Email me a link" pendingLabel="Sending…" onSubmit={requestLink} />
+      <EmailForm submitLabel="Email me a link" pendingLabel="Sending..." onSubmit={requestLink} />
       {status.phase === "failed" && (
         <p role="alert" className="mt-4 text-sm text-attention">
           {status.message}

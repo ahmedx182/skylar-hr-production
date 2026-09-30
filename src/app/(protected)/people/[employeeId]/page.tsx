@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarClock, CheckCircle2, FileText, MapPin } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, FilePlus2, Flag, History, MapPin } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import { CopyEmailButton } from "@/components/briefing/copy-email-button";
+import { DeleteEmployeeButton } from "@/components/briefing/delete-employee-button";
 import { EditEmployeeProfile } from "@/components/briefing/edit-employee-profile";
-import { PEOPLE_PATH } from "@/constants/routes";
+import { EmployeeHistoryList } from "@/components/briefing/employee-history-list";
+import { PrintEmployeeFileButton } from "@/components/briefing/print-employee-file-button";
+import { NEW_NOTE_PATH, PEOPLE_PATH } from "@/constants/routes";
 import { ledgerStatusLabel } from "@/features/briefing/status-label";
 import { NotFoundError } from "@/lib/errors";
 import { requirePageSession } from "@/server/auth/require-session";
@@ -46,10 +49,11 @@ export default async function EmployeeProfilePage({
     : "No activity yet";
   const detailChips = [employee.jobTitle, employee.location].filter(Boolean);
   const currentState = ledger[0] ? ledgerStatusLabel(ledger[0].statusDot) : "No notes";
+  const currentPriority = priorityLabel(ledger[0]?.statusDot ?? null);
   const canEdit = session.role === "admin";
 
   return (
-    <BriefingRoomFrame session={session} active="People">
+    <BriefingRoomFrame session={session} active="People" quickActionEmployeeId={employee.id}>
       <section className="grid content-start gap-3">
         <div className="rounded-[24px] bg-ink-2 px-5 py-5 text-paper shadow-[0_20px_56px_rgba(0,0,0,0.22),inset_0_0_0_1px_rgba(244,239,231,0.055),inset_0_1px_0_rgba(244,239,231,0.08)] md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -60,7 +64,13 @@ export default async function EmployeeProfilePage({
               <ArrowLeft className="size-4" aria-hidden="true" />
               Back to people
             </Link>
-            {canEdit && <EditEmployeeProfile employee={employee} />}
+            {canEdit && (
+              <div className="flex items-center gap-2 print:hidden">
+                <PrintEmployeeFileButton employee={employee} ledger={ledger} />
+                <EditEmployeeProfile employee={employee} />
+                <DeleteEmployeeButton employeeId={employee.id} employeeName={employee.name} />
+              </div>
+            )}
           </div>
 
           <div className="mt-4">
@@ -71,7 +81,9 @@ export default async function EmployeeProfilePage({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-6">
                   <div className="min-w-0">
-                    <p className="font-mono text-xs uppercase text-paper-3">Employee profile</p>
+                    <p className="font-mono text-xs uppercase text-paper-3">
+                      {employee.employeeCode ?? "Employee profile"}
+                    </p>
                     <h1 className="mt-1.5 text-3xl font-semibold leading-tight md:text-4xl">
                       {employee.name}
                     </h1>
@@ -91,7 +103,9 @@ export default async function EmployeeProfilePage({
                 </div>
                 <div className="mt-4 flex w-fit max-w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-paper/[0.045] px-3 py-2.5 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.04)]">
                   <CopyEmailButton email={employee.email} />
+                  <ProfileMeta icon={Flag} label="Priority" value={currentPriority} />
                   <ProfileMeta icon={CheckCircle2} label="State" value={currentState} />
+                  <ProfileMeta icon={History} label="History" value={`${ledger.length} ${ledger.length === 1 ? "entry" : "entries"}`} />
                   {!employee.location && <ProfileMeta icon={MapPin} label="Location" value="Missing" />}
                   <ProfileMeta icon={CalendarClock} label="Last updated" value={lastUpdated} />
                 </div>
@@ -100,47 +114,41 @@ export default async function EmployeeProfilePage({
           </div>
         </div>
 
-        <div className="rounded-[20px] bg-ink-2/60 p-3 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.035)]">
+        <div className="rounded-[20px] bg-ink-2/60 p-4 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.035)]">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-paper">Saved notes</p>
+              <p className="text-sm font-semibold text-paper">History</p>
               <p className="mt-1 text-sm text-paper-3">
-                Every note attached to {employee.name}&apos;s file.
+                Saved notes and follow-up state for {employee.name}.
               </p>
             </div>
+            <Link
+              href={`${NEW_NOTE_PATH}?employeeId=${employee.id}`}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-paper px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-90"
+            >
+              <FilePlus2 className="size-4" aria-hidden="true" />
+              New note
+            </Link>
           </div>
 
-          <div className="mt-3 grid gap-2">
-            {ledger.length ? (
-              ledger.map((note) => (
-                <Link
-                  key={note.id}
-                  href={`/documents/${note.id}`}
-                  className="grid gap-3 rounded-xl bg-paper/[0.055] px-4 py-3 transition-colors hover:bg-paper/[0.10] md:grid-cols-[86px_minmax(0,1fr)_150px] md:items-center"
-                >
-                  <span className="w-fit rounded-full bg-paper px-3 py-1 font-mono text-xs uppercase text-ink">
-                    {note.type}
-                  </span>
-                  <p className="text-sm leading-6 text-paper-2">{note.description}</p>
-                  <p className="text-sm text-paper-3 md:text-right">
-                    {ledgerStatusLabel(note.statusDot)}
-                  </p>
-                </Link>
-              ))
-            ) : (
-              <div className="rounded-xl bg-paper/[0.06] px-4 py-8 text-center">
-                <FileText className="mx-auto size-6 text-paper-3" aria-hidden="true" />
-                <p className="mt-3 font-semibold text-paper">No notes saved for this person yet.</p>
-                <p className="mt-2 text-sm leading-6 text-paper-3">
-                  Use New note and select this employee when there is context to keep.
-                </p>
-              </div>
-            )}
+          <div className="mt-4">
+            <EmployeeHistoryList
+              employeeId={employee.id}
+              employeeName={employee.name}
+              ledger={ledger}
+            />
           </div>
         </div>
       </section>
     </BriefingRoomFrame>
   );
+}
+
+function priorityLabel(statusDot: "amber" | "green" | "red" | null): string {
+  if (statusDot === "red") return "High";
+  if (statusDot === "amber") return "Follow-up";
+  if (statusDot === "green") return "Resolved";
+  return "Normal";
 }
 
 function ProfileMeta({

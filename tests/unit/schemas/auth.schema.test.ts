@@ -3,11 +3,21 @@ import {
   appUserSchema,
   loginSchema,
   sessionRequestSchema,
+  signupSchema,
 } from "@/schemas/auth.schema";
 
 describe("sessionRequestSchema", () => {
   it("accepts an ID token", () => {
     expect(sessionRequestSchema.safeParse({ idToken: "abc" }).success).toBe(true);
+  });
+
+  it("accepts signup metadata with an ID token", () => {
+    expect(
+      sessionRequestSchema.safeParse({
+        idToken: "abc",
+        signup: { companyName: "Example Company" },
+      }).success,
+    ).toBe(true);
   });
 
   it.each([
@@ -17,6 +27,19 @@ describe("sessionRequestSchema", () => {
     { input: { idToken: "x".repeat(4097) }, why: "oversized" },
   ])("rejects an ID token that is $why", ({ input }) => {
     expect(sessionRequestSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+describe("signupSchema", () => {
+  it("accepts a company name and normalized email", () => {
+    expect(signupSchema.parse({ companyName: " Example Company ", email: " User@Example.COM " })).toEqual({
+      companyName: "Example Company",
+      email: "user@example.com",
+    });
+  });
+
+  it("rejects a missing company name", () => {
+    expect(signupSchema.safeParse({ companyName: "", email: "user@example.com" }).success).toBe(false);
   });
 });
 
@@ -36,7 +59,7 @@ describe("appUserSchema", () => {
   const valid = {
     companyId: "company-a",
     email: "m@acme.com",
-    role: "manager",
+    role: "admin",
     status: "active",
   };
 

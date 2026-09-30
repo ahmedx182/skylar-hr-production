@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   verifySessionCookie: vi.fn(),
   findUserById: vi.fn(),
+  findCompanyNameById: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({
@@ -10,6 +11,7 @@ vi.mock("@/lib/firebase/admin", () => ({
 }));
 vi.mock("@/server/repositories/user.repository", () => ({
   findUserById: mocks.findUserById,
+  findCompanyNameById: mocks.findCompanyNameById,
 }));
 
 import { resolveSession } from "@/server/auth/resolve-session";
@@ -30,6 +32,7 @@ describe("resolveSession", () => {
     vi.resetAllMocks();
     mocks.verifySessionCookie.mockResolvedValue({ uid: "u1", email: "m@acme.com" });
     mocks.findUserById.mockResolvedValue(activeUser);
+    mocks.findCompanyNameById.mockResolvedValue("Acme");
   });
 
   it("returns null without a cookie and never calls Firebase", async () => {
@@ -48,6 +51,7 @@ describe("resolveSession", () => {
       uid: "u1",
       email: "m@acme.com",
       companyId: "company-a",
+      companyName: "Acme",
       role: "manager",
     });
   });

@@ -8,6 +8,7 @@ const LEDGER_COLLECTION = "employee_ledger_entries";
 
 export type EmployeeRecord = {
   id: string;
+  employeeCode: string | null;
   name: string;
   email: string | null;
   jobTitle: string | null;
@@ -29,6 +30,7 @@ export type LedgerRecord = {
 type EmployeeData = {
   companyId?: unknown;
   name?: unknown;
+  employeeCode?: unknown;
   email?: unknown;
   jobTitle?: unknown;
   location?: unknown;
@@ -71,6 +73,7 @@ function employeeFromDoc(doc: QueryDocumentSnapshot): EmployeeRecord {
   const data = doc.data() as EmployeeData;
   return {
     id: doc.id,
+    employeeCode: optionalString(data.employeeCode),
     name: optionalString(data.name) ?? "Unnamed employee",
     email: optionalString(data.email),
     jobTitle: optionalString(data.jobTitle),

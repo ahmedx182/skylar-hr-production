@@ -1,12 +1,16 @@
 import Link from "next/link";
-import { Archive, FileText, UserRound, Workflow } from "lucide-react";
+import { Archive, CreditCard, FileText, Settings, ShieldAlert, UserRound, Workflow } from "lucide-react";
 import {
+  ADVISOR_PATH,
+  BILLING_PATH,
   BRIEFING_PATH,
   DEFERRED_PATH,
   DOCUMENTS_PATH,
   PEOPLE_PATH,
+  SETTINGS_PATH,
 } from "@/constants/routes";
 import { cn } from "@/lib/utils/cn";
+import type { Role } from "@/types/auth";
 
 const indexItems = [
   {
@@ -33,14 +37,45 @@ const indexItems = [
     icon: FileText,
     description: "Saved history",
   },
+  {
+    label: "Advisor",
+    href: ADVISOR_PATH,
+    icon: ShieldAlert,
+    description: "Escalations",
+    adminOnly: true,
+  },
+  {
+    label: "Billing",
+    href: BILLING_PATH,
+    icon: CreditCard,
+    description: "Trial & plan",
+    adminOnly: true,
+  },
+  {
+    label: "Settings",
+    href: SETTINGS_PATH,
+    icon: Settings,
+    description: "Account",
+  },
 ] as const;
 
 export type IndexSection = (typeof indexItems)[number]["label"];
 
-export function BriefingIndexNav({ active }: { active: IndexSection }) {
+export function BriefingIndexNav({
+  active,
+  role,
+  hideBilling = false,
+}: {
+  active: IndexSection;
+  role: Role;
+  hideBilling?: boolean;
+}) {
   return (
     <nav aria-label="Briefing index" className="grid gap-1 sm:grid-cols-4 lg:grid-cols-1">
-      {indexItems.map((item) => {
+      {indexItems.filter((item) => {
+        if (hideBilling && item.label === "Billing") return false;
+        return !("adminOnly" in item) || role === "admin";
+      }).map((item) => {
         const Icon = item.icon;
         const isActive = item.label === active;
 
