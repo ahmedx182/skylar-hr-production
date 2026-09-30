@@ -49,5 +49,8 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "jwks-rsa": "3.2.2"
   }
 }
