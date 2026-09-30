@@ -3,6 +3,7 @@ import { CalendarClock, CheckCircle2, CreditCard, ShieldAlert, type LucideIcon }
 import { BillingActions } from "@/components/billing/billing-actions";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import type { BillingStatus, CompanyBillingState } from "@/features/billing/subscription-status";
+import { getServerEnv } from "@/lib/env/server";
 import { requirePageSession } from "@/server/auth/require-session";
 import { requireRole } from "@/server/auth/require-role";
 import { getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
@@ -13,6 +14,7 @@ export default async function BillingPage() {
   const session = await requirePageSession();
   requireRole(session, ["admin"]);
   const billing = await getOrCreateCompanyBillingState(session);
+  const paymentGateDisabled = getServerEnv().DEMO_DISABLE_PAYMENT_GATE;
 
   return (
     <BriefingRoomFrame session={session} active="Billing">
@@ -55,9 +57,16 @@ export default async function BillingPage() {
 
             <div className="mt-4 rounded-2xl bg-paper/[0.055] p-4">
               <p className="font-mono text-xs uppercase text-paper-3">Stripe actions</p>
-              <div className="mt-3">
-                <BillingActions hasCustomer={Boolean(billing.stripeCustomerId)} />
-              </div>
+              {paymentGateDisabled ? (
+                <p className="mt-3 text-sm leading-6 text-paper-2">
+                  Payment is disabled for the client demo. The core app remains accessible while
+                  live Stripe setup stays out of tomorrow&apos;s scope.
+                </p>
+              ) : (
+                <div className="mt-3">
+                  <BillingActions hasCustomer={Boolean(billing.stripeCustomerId)} />
+                </div>
+              )}
             </div>
           </div>
 
@@ -75,8 +84,9 @@ export default async function BillingPage() {
             <div className="mt-4 rounded-2xl bg-paper/[0.055] p-4">
               <p className="font-mono text-xs uppercase text-paper-3">Release check</p>
               <p className="mt-2 text-sm leading-6 text-paper-2">
-                Add live Stripe keys, set the webhook endpoint, then run the full trial to paid
-                flow before releasing the web app.
+                {paymentGateDisabled
+                  ? "For tomorrow, demo every core flow except payment. Re-enable the gate before live billing UAT."
+                  : "Add live Stripe keys, set the webhook endpoint, then run the full trial to paid flow before releasing the web app."}
               </p>
             </div>
           </aside>

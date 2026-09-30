@@ -100,11 +100,13 @@ describe("getServerEnv", () => {
       RESEND_API_KEY: "",
       SKYLAR_TEAM_EMAIL: "",
       RESEND_FROM_EMAIL: "",
+      DEMO_DISABLE_PAYMENT_GATE: "",
     });
     const getServerEnv = await loadGetServerEnv();
 
     expect(getServerEnv()).toMatchObject({
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
+      DEMO_DISABLE_PAYMENT_GATE: false,
       STRIPE_SECRET_KEY: undefined,
       STRIPE_WEBHOOK_SECRET: undefined,
       STRIPE_PRICE_ID: undefined,
@@ -112,5 +114,12 @@ describe("getServerEnv", () => {
       SKYLAR_TEAM_EMAIL: undefined,
       RESEND_FROM_EMAIL: undefined,
     });
+  });
+
+  it("parses the demo payment gate bypass", async () => {
+    stubEnv({ DEMO_DISABLE_PAYMENT_GATE: "true" });
+    const getServerEnv = await loadGetServerEnv();
+
+    expect(getServerEnv().DEMO_DISABLE_PAYMENT_GATE).toBe(true);
   });
 });

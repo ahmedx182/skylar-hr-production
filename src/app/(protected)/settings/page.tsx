@@ -3,8 +3,9 @@ import Link from "next/link";
 import { CreditCard, LockKeyhole, UserRound, WalletCards } from "lucide-react";
 import { AccountSettingsForm } from "@/components/settings/account-settings-form";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
-import { BILLING_PATH } from "@/constants/routes";
+import { BILLING_PATH, PRIVACY_PATH, TERMS_PATH } from "@/constants/routes";
 import { companyDisplayName } from "@/lib/company-display-name";
+import { getServerEnv } from "@/lib/env/server";
 import { requirePageSession } from "@/server/auth/require-session";
 import { findUserById } from "@/server/repositories/user.repository";
 
@@ -14,6 +15,7 @@ export default async function SettingsPage() {
   const session = await requirePageSession();
   const user = await findUserById(session.uid);
   const workspaceName = companyDisplayName(session);
+  const paymentGateDisabled = getServerEnv().DEMO_DISABLE_PAYMENT_GATE;
 
   return (
     <BriefingRoomFrame session={session} active="Settings">
@@ -60,7 +62,7 @@ export default async function SettingsPage() {
               <WalletCards className="size-5 text-attention" aria-hidden="true" />
               <p className="mt-4 font-mono text-xs uppercase text-paper-3">Role</p>
               <p className="mt-2 text-lg font-semibold capitalize text-paper">{session.role}</p>
-              {session.role === "admin" && (
+              {session.role === "admin" && !paymentGateDisabled && (
                 <Link
                   href={BILLING_PATH}
                   className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-full bg-paper/[0.08] px-4 text-sm font-semibold text-paper transition-colors hover:bg-paper hover:text-ink"
@@ -69,6 +71,24 @@ export default async function SettingsPage() {
                   Billing
                 </Link>
               )}
+            </div>
+
+            <div className="rounded-[20px] bg-ink-2/70 p-5 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.04)]">
+              <p className="font-mono text-xs uppercase text-paper-3">Legal</p>
+              <div className="mt-4 grid gap-2">
+                <Link
+                  href={TERMS_PATH}
+                  className="text-sm font-semibold text-paper-2 transition-colors hover:text-paper"
+                >
+                  Terms of Service
+                </Link>
+                <Link
+                  href={PRIVACY_PATH}
+                  className="text-sm font-semibold text-paper-2 transition-colors hover:text-paper"
+                >
+                  Privacy Policy
+                </Link>
+              </div>
             </div>
           </aside>
         </div>

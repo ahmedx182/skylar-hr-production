@@ -29,6 +29,11 @@ const optionalDomainList = z.preprocess(
   z.array(z.string()).default([]),
 );
 
+const optionalBoolean = z.preprocess(
+  (value) => value === "true" || value === true,
+  z.boolean().default(false),
+);
+
 const serverEnvSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   FIREBASE_PROJECT_ID: z.string().min(1),
@@ -46,6 +51,7 @@ const serverEnvSchema = z.object({
   AI_RATE_LIMIT_WINDOW_MS: optionalPositiveInt(60_000),
   AI_RESPONSE_CACHE_TTL_MS: optionalPositiveInt(300_000),
   SIGNUP_ALLOWED_DOMAINS: optionalDomainList,
+  DEMO_DISABLE_PAYMENT_GATE: optionalBoolean,
   STRIPE_SECRET_KEY: optionalNonEmptyString,
   STRIPE_WEBHOOK_SECRET: optionalNonEmptyString,
   STRIPE_PRICE_ID: optionalNonEmptyString,

@@ -10,3 +10,5 @@ export const NEW_NOTE_PATH = "/notes/new";
 export const ADVISOR_PATH = "/advisor";
 export const BILLING_PATH = "/billing";
 export const SETTINGS_PATH = "/settings";
+export const TERMS_PATH = "/terms";
+export const PRIVACY_PATH = "/privacy";

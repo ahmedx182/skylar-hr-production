@@ -1,6 +1,6 @@
 # Skylar Project Memory
 
-Last reviewed: 2026-09-29
+Last reviewed: 2026-09-30
 
 Local commit saved: `9772adf Complete Skylar briefing room task batch`
 
@@ -11,8 +11,9 @@ in the numbered docs in this folder.
 ## Current State
 
 The web app has a broad Briefing Room implementation covering the completed
-task batch from Task 3 through Task 30. The working tree was clean immediately
-after commit `9772adf`.
+task batch from Task 3 through Task 32. The working tree was clean immediately
+after commit `9772adf`, then Tasks 31-32 were added for tomorrow's client demo
+readiness.
 
 Verified after the latest task work:
 
@@ -70,9 +71,13 @@ confirmed.
 - Billing page with Stripe Checkout, Customer Portal, webhook route, and
   server-side 14-day trial gating.
 - Account Settings page with display name and admin workspace rename.
+- Terms of Service and Privacy Policy routes linked from sign-in and Settings.
+- Demo payment bypass via `DEMO_DISABLE_PAYMENT_GATE=true`, keeping the core app
+  usable for a "full app minus payment" client demo while leaving Stripe code
+  intact for later UAT.
 - Custom destructive confirmation modals for delete actions.
 - PDF export using `jspdf`, not browser print.
-- Project ticket docs for Tasks 3-30.
+- Project ticket docs for Tasks 3-32.
 
 ## Important Current Decisions
 
@@ -85,6 +90,9 @@ confirmed.
   persist setup/skipped states instead.
 - Keep motion subtle and avoid blur-heavy transitions.
 - Use `jsPDF` for employee file exports.
+- For tomorrow's client demo, payment can be excluded by setting
+  `DEMO_DISABLE_PAYMENT_GATE=true`; re-enable normal billing gates before live
+  payment UAT.
 
 ## Main Routes
 
@@ -104,15 +112,18 @@ confirmed.
 | `/advisor` | Advisor escalation queue/workbench |
 | `/billing` | Trial/subscription state and Stripe actions |
 | `/settings` | Account/workspace settings |
+| `/terms` | Terms of Service placeholder pending legal-approved copy |
+| `/privacy` | Privacy Policy placeholder pending legal-approved copy |
 
 ## Latest Completed Tickets
 
-- Task 27: Stripe billing and trial gating.
 - Task 28: Advisor escalation email notifications.
 - Task 29: Account Settings page.
 - Task 30: jsPDF employee file export.
+- Task 31: Terms and Privacy routes.
+- Task 32: Demo readiness minus payment.
 
-All ticket docs from Task 3 through Task 30 are marked done under
+All ticket docs from Task 3 through Task 32 are marked done under
 `docs/tickets/`.
 
 ## Remaining Launch Work
@@ -127,7 +138,8 @@ Highest priority before a Thursday client release:
 - Run UAT for signup, Live-in-5, briefing, employee file, advisor escalation,
   billing/trial gating, and PDF export.
 - Stress-test Firestore security rules and cross-tenant isolation.
-- Confirm Terms of Service and Privacy Policy links/pages.
+- Replace Terms of Service and Privacy Policy placeholder copy with
+  legal-approved final copy.
 - Confirm named UAT approver and go/no-go owner.
 
 Still remaining beyond the current web-app task batch:
