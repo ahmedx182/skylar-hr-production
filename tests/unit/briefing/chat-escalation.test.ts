@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { buildEscalationNotice } from "@/features/briefing/chat-escalation";
+import { buildEscalationNotice, toEscalationEvent } from "@/features/briefing/chat-escalation";
+
+describe("toEscalationEvent", () => {
+  it("sends nothing to the screen when the message was not high risk", () => {
+    expect(toEscalationEvent({ kind: "none" })).toBeNull();
+  });
+
+  it("sends the case id and reason for a real escalation", () => {
+    expect(toEscalationEvent({ kind: "escalated", reason: "Potential harassment concern.", caseId: "CASE-1" })).toEqual({
+      kind: "escalated",
+      reason: "Potential harassment concern.",
+      caseId: "CASE-1",
+    });
+  });
+
+  it("sends the reason without a case id when nothing was escalated", () => {
+    expect(toEscalationEvent({ kind: "needs_employee", reason: "Potential safety concern." })).toEqual({
+      kind: "needs_employee",
+      reason: "Potential safety concern.",
+    });
+    expect(toEscalationEvent({ kind: "failed", reason: "Potential legal concern." })).toEqual({
+      kind: "failed",
+      reason: "Potential legal concern.",
+    });
+  });
+});
 
 describe("buildEscalationNotice", () => {
   it("adds nothing when the message is not high risk", () => {

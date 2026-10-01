@@ -3,7 +3,11 @@ import { z } from "zod";
 import { AppError, ExternalServiceError, toErrorResponse, ValidationError } from "@/lib/errors";
 import { getServerEnv } from "@/lib/env/server";
 import { assertWithinRateLimit } from "@/server/ai/rate-limit";
-import { buildEscalationNotice } from "@/features/briefing/chat-escalation";
+import {
+  buildEscalationNotice,
+  toEscalationEvent,
+  type ChatEscalationOutcome,
+} from "@/features/briefing/chat-escalation";
 import { escalateFromChat } from "@/server/ai/chat-escalation";
 import { streamSkylarConversation } from "@/server/ai/skylar-conversation";
 import { requireSession } from "@/server/auth/require-session";
@@ -72,9 +76,11 @@ export async function POST(request: NextRequest) {
     // Employees only send a prompt; their name comes from the session, never from the client.
     const chatInput = isEmployee ? { prompt: input.prompt, employeeName: session.displayName ?? undefined } : input;
     // Managers: high-risk messages are escalated server-side and the bot is told what happened.
-    const escalationNotice = isEmployee
-      ? undefined
-      : buildEscalationNotice(await escalateFromChat(session, { prompt: input.prompt, employeeId: input.employeeId })) ?? undefined;
+    const escalation: ChatEscalationOutcome = isEmployee
+      ? { kind: "none" }
+      : await escalateFromChat(session, { prompt: input.prompt, employeeId: input.employeeId });
+    const escalationNotice = buildEscalationNotice(escalation) ?? undefined;
+    const escalationEvent = toEscalationEvent(escalation);
     const stream = await streamSkylarConversation(env, { ...chatInput, history, callerRole: session.role, escalationNotice }).catch((error: unknown) => {
       throw conversationError(error);
     });
@@ -84,6 +90,9 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         let assistantText = "";
         try {
+          if (escalationEvent) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ escalation: escalationEvent })}\n\n`));
+          }
           for await (const text of stream) {
             assistantText += text;
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));

@@ -2,8 +2,10 @@
 
 import { ChevronsUpDown, LoaderCircle, RefreshCcw, Send, UserRound, X } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { AttachFileButton } from "@/components/briefing/attach-file-button";
+import { EscalationNoticeCard } from "@/components/briefing/escalation-notice-card";
+import type { EscalationEvent } from "@/features/briefing/chat-escalation";
 import { SkylarMessageText } from "@/components/briefing/skylar-message-text";
 
 type SkylarContext = {
@@ -16,6 +18,7 @@ type SkylarContext = {
 type SkylarMessage = {
   role: "user" | "assistant";
   text: string;
+  escalation?: EscalationEvent;
 };
 
 type EmployeeOption = {
@@ -179,8 +182,17 @@ export function FloatingSkylarAction() {
           if (!line) continue;
           const data = line.slice(6);
           if (data === "[DONE]") continue;
-          const parsed = JSON.parse(data) as { text?: string; error?: string };
+          const parsed = JSON.parse(data) as { text?: string; error?: string; escalation?: EscalationEvent };
           if (parsed.error) throw new Error(parsed.error);
+          if (parsed.escalation) {
+            const escalation = parsed.escalation;
+            setMessages((current) => {
+              const next = [...current];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") next[next.length - 1] = { ...last, escalation };
+              return next;
+            });
+          }
           if (parsed.text) {
             setMessages((current) => {
               const next = [...current];
@@ -529,7 +541,13 @@ export function FloatingSkylarAction() {
             )}
             <div className="grid gap-4">
               {messages.map((message, index) => (
-                <div key={`${message.role}-${index}`} className={message.role === "user" ? "flex justify-end" : "flex items-end gap-2"}>
+                <Fragment key={`${message.role}-${index}`}>
+                {message.escalation && (
+                  <div className="pl-9">
+                    <EscalationNoticeCard event={message.escalation} />
+                  </div>
+                )}
+                <div className={message.role === "user" ? "flex justify-end" : "flex items-end gap-2"}>
                   {message.role === "assistant" && (
                     <span aria-hidden="true" className="mb-1 block size-7 shrink-0 bg-[url('/brand/logo.png')] bg-[length:25px_23px] bg-center bg-no-repeat" />
                   )}
@@ -537,8 +555,9 @@ export function FloatingSkylarAction() {
                     {message.text ? (message.role === "assistant" ? <SkylarMessageText text={message.text} /> : message.text) : (isLoading ? "Thinking..." : "")}
                   </div>
                 </div>
+                </Fragment>
               ))}
-              {error && <p className="border-l-2 border-risk px-3 py-2 text-sm leading-6 text-risk">{error}</p>}
+              {error &&<p className="border-l-2 border-risk px-3 py-2 text-sm leading-6 text-risk">{error}</p>}
               <div ref={messagesEndRef} />
             </div>
           </div>

@@ -4,6 +4,25 @@ export type ChatEscalationOutcome =
   | { kind: "needs_employee"; reason: string }
   | { kind: "failed"; reason: string };
 
+/** What the chat screen needs to show an escalation card. */
+export type EscalationEvent = {
+  kind: "escalated" | "needs_employee" | "failed";
+  reason: string;
+  caseId?: string;
+};
+
+export function toEscalationEvent(outcome: ChatEscalationOutcome): EscalationEvent | null {
+  switch (outcome.kind) {
+    case "none":
+      return null;
+    case "escalated":
+      return { kind: "escalated", reason: outcome.reason, caseId: outcome.caseId };
+    case "needs_employee":
+    case "failed":
+      return { kind: outcome.kind, reason: outcome.reason };
+  }
+}
+
 /**
  * Tells the model what the server actually did with a high-risk message, so it
  * only ever says "escalated" when an escalation really exists.
