@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { IndexAccessPage } from "@/components/briefing/index-access-page";
 import { buildDailyBriefingDeck } from "@/features/briefing/daily-deck";
 import { buildDeferredIndexItems } from "@/features/briefing/deferred-items";
@@ -13,6 +14,7 @@ export const metadata: Metadata = { title: "Deferred" };
 
 export default async function DeferredPage() {
   const session = await requirePageSession();
+  if (session.role !== "admin") redirect(session.linkedEmployeeId ? `/people/${session.linkedEmployeeId}` : "/settings");
   const [employees, ledger, deferredActions] = await Promise.all([
     listCompanyEmployees(session.companyId),
     listCompanyLedger(session.companyId),

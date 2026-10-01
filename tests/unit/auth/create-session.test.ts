@@ -5,12 +5,20 @@ const mocks = vi.hoisted(() => ({
   createSessionCookie: vi.fn(),
   findUserById: vi.fn(),
   provisionSignupWorkspace: vi.fn(),
+  provisionInvitedUser: vi.fn(),
+  findPendingInviteByEmail: vi.fn(),
+  acceptInvite: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({ adminAuth: () => mocks }));
 vi.mock("@/server/repositories/user.repository", () => ({
   findUserById: mocks.findUserById,
   provisionSignupWorkspace: mocks.provisionSignupWorkspace,
+  provisionInvitedUser: mocks.provisionInvitedUser,
+}));
+vi.mock("@/server/repositories/invite.repository", () => ({
+  findPendingInviteByEmail: mocks.findPendingInviteByEmail,
+  acceptInvite: mocks.acceptInvite,
 }));
 
 import { SESSION_MAX_AGE_MS } from "@/constants/auth";
@@ -36,6 +44,8 @@ describe("createSession", () => {
       auth_time: nowSeconds() - 30,
     });
     mocks.createSessionCookie.mockResolvedValue("signed-cookie");
+    mocks.findPendingInviteByEmail.mockResolvedValue(null);
+    mocks.acceptInvite.mockResolvedValue(undefined);
     mocks.findUserById.mockResolvedValue({
       id: "u1",
       companyId: "company-1",
@@ -101,6 +111,36 @@ describe("createSession", () => {
     await expect(createSession("id-token")).rejects.toThrow("This email has not been added to Skylar.");
     expect(mocks.provisionSignupWorkspace).not.toHaveBeenCalled();
     expect(mocks.createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("accepts an invited user with no signup metadata when a pending invite exists", async () => {
+    mocks.findUserById.mockResolvedValue(null);
+    mocks.findPendingInviteByEmail.mockResolvedValue({
+      id: "inv-1",
+      companyId: "company-invite",
+      email: "admin@example.com",
+      role: "employee",
+      linkedEmployeeId: null,
+      status: "pending",
+      createdBy: "admin-uid",
+      createdAtMs: Date.now(),
+    });
+    mocks.provisionInvitedUser.mockResolvedValue({
+      id: "u1",
+      companyId: "company-invite",
+      email: "admin@example.com",
+      role: "employee",
+      status: "active",
+    });
+
+    await expect(createSession("id-token")).resolves.toEqual({
+      cookie: "signed-cookie",
+      maxAgeMs: SESSION_MAX_AGE_MS,
+    });
+    expect(mocks.provisionInvitedUser).toHaveBeenCalledWith(
+      expect.objectContaining({ companyId: "company-invite", role: "employee" }),
+    );
+    expect(mocks.acceptInvite).toHaveBeenCalledWith("inv-1");
   });
 
   it("provisions a signup workspace before creating the session cookie", async () => {

@@ -1,7 +1,7 @@
 import "server-only";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { adminAuth } from "@/lib/firebase/admin";
-import { findCompanyNameById, findUserById } from "@/server/repositories/user.repository";
+import { findCompanyNameById, findEmployeeIdByEmail, findUserById } from "@/server/repositories/user.repository";
 import type { AuthSession } from "@/types/auth";
 import { isFirebaseAuthError } from "./firebase-auth-error";
 
@@ -24,12 +24,18 @@ export async function resolveSession(cookie: string | undefined): Promise<AuthSe
   const user = await findUserById(claims.uid);
   if (!user || user.status !== "active") return null;
   const companyName = await findCompanyNameById(user.companyId);
+  // Employees created before account linking existed: match their file by work email.
+  const linkedEmployeeId =
+    user.linkedEmployeeId ??
+    (user.role === "employee" ? await findEmployeeIdByEmail(user.companyId, user.email) : null);
 
   return {
     uid: claims.uid,
     email: claims.email ?? null,
+    displayName: user.displayName,
     companyId: user.companyId,
     companyName,
     role: user.role,
+    linkedEmployeeId,
   };
 }

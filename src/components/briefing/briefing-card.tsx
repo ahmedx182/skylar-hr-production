@@ -472,11 +472,15 @@ function HoldToEscalateButton({
         onPointerCancel={clearHold}
         onPointerLeave={clearHold}
         onKeyDown={(event) => {
-          if (event.key === " " || event.key === "Enter") startHold();
+          if (event.key === " " || event.key === "Enter") {
+            event.preventDefault();
+            startHold();
+          }
         }}
         onKeyUp={(event) => {
           if (event.key === " " || event.key === "Enter") clearHold();
         }}
+        title="Hold Space or Enter for 0.9 s to escalate"
         aria-label={buttonLabel}
         className={cn(
           "group relative h-12 overflow-hidden rounded-full border border-risk/30 bg-risk/10 px-4 text-sm font-semibold text-risk transition-colors hover:bg-risk/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-risk/30 disabled:cursor-not-allowed disabled:opacity-60",

@@ -298,3 +298,30 @@ export async function updateAdvisorEscalation(
   await batch.commit();
   return getCompanyAdvisorEscalation(session.companyId, escalationId);
 }
+
+export type EscalationAnalytics = {
+  total: number;
+  open: number;
+  responded: number;
+  resolved: number;
+};
+
+export async function getEscalationAnalytics(companyId: string): Promise<EscalationAnalytics> {
+  const snapshot = await adminDb()
+    .collection(ESCALATIONS_COLLECTION)
+    .where("companyId", "==", companyId)
+    .get();
+
+  let open = 0;
+  let responded = 0;
+  let resolved = 0;
+
+  for (const doc of snapshot.docs) {
+    const status = escalationStatus(doc.get("status"));
+    if (status === "with_advisor" || status === "draft_response") open++;
+    else if (status === "responded") responded++;
+    else if (status === "resolved" || status === "closed") resolved++;
+  }
+
+  return { total: snapshot.size, open, responded, resolved };
+}

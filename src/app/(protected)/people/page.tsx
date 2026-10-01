@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { CalendarClock, UserRound } from "lucide-react";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import { PeopleListClient } from "@/components/briefing/people-list-client";
@@ -10,6 +11,7 @@ export const metadata: Metadata = { title: "People" };
 
 export default async function PeoplePage() {
   const session = await requirePageSession();
+  if (session.role !== "admin") redirect(session.linkedEmployeeId ? `/people/${session.linkedEmployeeId}` : "/settings");
   const employees = await listCompanyEmployees(session.companyId);
 
   return (

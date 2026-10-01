@@ -3,7 +3,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { TRIAL_DAYS, trialEndsAtFromCreatedAt } from "@/features/billing/subscription-status";
 import { adminDb } from "@/lib/firebase/admin";
 import { appUserSchema, type AccountSettingsInput } from "@/schemas/auth.schema";
-import { NotFoundError } from "@/lib/errors";
+import { AuthorizationError, NotFoundError } from "@/lib/errors";
 import type { AppUser, AuthSession } from "@/types/auth";
 
 const COMPANIES_COLLECTION = "companies";
@@ -29,6 +29,18 @@ export async function findActiveUserByEmail(email: string): Promise<AppUser | nu
 
   const user = { id: doc.id, ...appUserSchema.parse(doc.data()) };
   return user.status === "active" ? user : null;
+}
+
+/** Employee file whose work email matches a login email, used when a user has no explicit link. */
+export async function findEmployeeIdByEmail(companyId: string, email: string): Promise<string | null> {
+  const snapshot = await adminDb()
+    .collection("employees")
+    .where("companyId", "==", companyId)
+    .where("email", "==", email.trim().toLowerCase())
+    .limit(1)
+    .get();
+
+  return snapshot.docs[0]?.id ?? null;
 }
 
 export async function findCompanyNameById(companyId: string): Promise<string | null> {
@@ -91,6 +103,81 @@ export async function provisionSignupWorkspace({
   await batch.commit();
 
   return user;
+}
+
+export async function provisionInvitedUser({
+  uid,
+  email,
+  companyId,
+  role,
+  linkedEmployeeId,
+}: {
+  uid: string;
+  email: string;
+  companyId: string;
+  role: "admin" | "employee";
+  linkedEmployeeId: string | null;
+}): Promise<AppUser> {
+  const db = adminDb();
+  const userRef = db.collection(USERS_COLLECTION).doc(uid);
+  const userSnapshot = await userRef.get();
+
+  if (userSnapshot.exists) {
+    const existing = { id: userSnapshot.id, ...appUserSchema.parse(userSnapshot.data()) };
+    if (existing.status === "active") return existing;
+  }
+
+  const displayName = email.split("@")[0] || "Team member";
+  const now = FieldValue.serverTimestamp();
+  const userData: Record<string, unknown> = {
+    companyId,
+    email,
+    displayName,
+    role,
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  };
+  if (linkedEmployeeId) userData.linkedEmployeeId = linkedEmployeeId;
+
+  await userRef.set(userData);
+
+  return { id: uid, companyId, email, displayName, role, status: "active", linkedEmployeeId: linkedEmployeeId ?? undefined };
+}
+
+export async function listCompanyUsers(companyId: string): Promise<AppUser[]> {
+  const snapshot = await adminDb()
+    .collection(USERS_COLLECTION)
+    .where("companyId", "==", companyId)
+    .get();
+
+  return snapshot.docs.flatMap((doc) => {
+    try {
+      return [{ id: doc.id, ...appUserSchema.parse(doc.data()) }];
+    } catch {
+      return [];
+    }
+  });
+}
+
+export async function updateUserRole(
+  session: AuthSession,
+  targetUid: string,
+  role: "admin" | "employee",
+): Promise<void> {
+  if (session.role !== "admin") throw new AuthorizationError();
+  if (targetUid === session.uid) throw new Error("You cannot change your own role.");
+
+  const db = adminDb();
+  const targetRef = db.collection(USERS_COLLECTION).doc(targetUid);
+  const targetSnap = await targetRef.get();
+  const targetData = targetSnap.data();
+
+  if (!targetSnap.exists || !targetData || targetData.companyId !== session.companyId) {
+    throw new NotFoundError("User not found.");
+  }
+
+  await targetRef.set({ role, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
 
 export async function updateAccountSettings(

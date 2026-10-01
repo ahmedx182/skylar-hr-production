@@ -33,6 +33,8 @@ export default async function DocumentDetailPage({
     if (error instanceof NotFoundError) notFound();
     throw error;
   }
+
+  if (session.role !== "admin" && note.employeeId !== session.linkedEmployeeId) notFound();
   const isConversation = note.type === "conversation";
   const conversationSummary = isConversation ? conversationLedgerSummary(note.description) : null;
   const backHref =
@@ -108,7 +110,7 @@ export default async function DocumentDetailPage({
                   )}
                 </div>
 
-                {note.employeeId && note.employeeName && (
+                {session.role === "admin" && note.employeeId && note.employeeName && (
                   <div className="grid content-start gap-2 rounded-xl bg-paper/70 p-3 shadow-[inset_0_0_0_1px_rgba(11,11,14,0.06)]">
                     <p className="font-mono text-[11px] uppercase text-ink/45">Next action</p>
                     <NoteAdvisorChatButton employeeId={note.employeeId} employeeName={note.employeeName} note={note.description} variant="light" />

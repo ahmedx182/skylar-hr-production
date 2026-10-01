@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, CalendarClock, CheckCircle2, FilePlus2, Flag, History, MapPin } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
@@ -26,6 +26,9 @@ export default async function EmployeeProfilePage({
   params: { employeeId: string };
 }) {
   const session = await requirePageSession();
+  if (session.role !== "admin" && session.linkedEmployeeId !== params.employeeId) {
+    redirect(session.linkedEmployeeId ? `/people/${session.linkedEmployeeId}` : "/settings");
+  }
 
   let employee;
   let ledger;
@@ -57,13 +60,17 @@ export default async function EmployeeProfilePage({
       <section className="grid content-start gap-3">
         <div className="rounded-[24px] bg-ink-2 px-5 py-5 text-paper shadow-[0_20px_56px_rgba(0,0,0,0.22),inset_0_0_0_1px_rgba(244,239,231,0.055),inset_0_1px_0_rgba(244,239,231,0.08)] md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link
-              href={PEOPLE_PATH}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-paper-3 hover:text-paper"
-            >
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              Back to people
-            </Link>
+            {canEdit ? (
+              <Link
+                href={PEOPLE_PATH}
+                className="inline-flex items-center gap-2 text-sm font-semibold text-paper-3 hover:text-paper"
+              >
+                <ArrowLeft className="size-4" aria-hidden="true" />
+                Back to people
+              </Link>
+            ) : (
+              <span />
+            )}
             {canEdit && (
               <div className="flex items-center gap-2 print:hidden">
                 <PrintEmployeeFileButton employee={employee} ledger={ledger} />
@@ -122,13 +129,15 @@ export default async function EmployeeProfilePage({
                 Saved notes and follow-up state for {employee.name}.
               </p>
             </div>
-            <Link
-              href={`${NEW_NOTE_PATH}?employeeId=${employee.id}`}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-paper px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-90"
-            >
-              <FilePlus2 className="size-4" aria-hidden="true" />
-              New note
-            </Link>
+            {canEdit && (
+              <Link
+                href={`${NEW_NOTE_PATH}?employeeId=${employee.id}`}
+                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-paper px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-90"
+              >
+                <FilePlus2 className="size-4" aria-hidden="true" />
+                New note
+              </Link>
+            )}
           </div>
 
           <div className="mt-4">
@@ -136,6 +145,7 @@ export default async function EmployeeProfilePage({
               employeeId={employee.id}
               employeeName={employee.name}
               ledger={ledger}
+              canChat={canEdit}
             />
           </div>
         </div>

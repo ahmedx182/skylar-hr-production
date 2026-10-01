@@ -51,31 +51,61 @@ const indexItems = [
     description: "Trial & plan",
     adminOnly: true,
   },
-  {
-    label: "Settings",
-    href: SETTINGS_PATH,
-    icon: Settings,
-    description: "Account",
-  },
 ] as const;
 
 export type IndexSection = (typeof indexItems)[number]["label"];
 
+/** Employees only reach their own file, their own documents and their account. */
+function employeeItems(linkedEmployeeId?: string | null) {
+  return [
+    ...(linkedEmployeeId
+      ? [
+          {
+            label: "People",
+            title: "My profile",
+            href: `${PEOPLE_PATH}/${linkedEmployeeId}`,
+            icon: UserRound,
+            description: "Your file",
+          },
+          {
+            label: "Documents",
+            title: "Documents",
+            href: DOCUMENTS_PATH,
+            icon: FileText,
+            description: "Saved history",
+          },
+        ]
+      : []),
+    {
+      label: "Settings",
+      title: "Settings",
+      href: SETTINGS_PATH,
+      icon: Settings,
+      description: "Your account",
+    },
+  ];
+}
+
 export function BriefingIndexNav({
   active,
   role,
-  hideBilling = false,
+  linkedEmployeeId,
 }: {
-  active: IndexSection;
+  active: IndexSection | string;
   role: Role;
-  hideBilling?: boolean;
+  linkedEmployeeId?: string | null;
 }) {
+  // Billing stays out of the sidebar; it is reachable from the account menu.
+  const items =
+    role === "admin"
+      ? indexItems
+          .filter((item) => item.label !== "Billing")
+          .map((item) => ({ ...item, title: item.label as string }))
+      : employeeItems(linkedEmployeeId);
+
   return (
     <nav aria-label="Briefing index" className="grid gap-1 sm:grid-cols-4 lg:grid-cols-1">
-      {indexItems.filter((item) => {
-        if (hideBilling && item.label === "Billing") return false;
-        return !("adminOnly" in item) || role === "admin";
-      }).map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         const isActive = item.label === active;
 
@@ -105,7 +135,7 @@ export function BriefingIndexNav({
                   isActive && "text-ink",
                 )}
               >
-                {item.label}
+                {item.title}
               </span>
               <span
                 className={cn(

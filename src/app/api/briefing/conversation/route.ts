@@ -9,6 +9,7 @@ import { parseJsonBody } from "@/server/http/parse-json-body";
 import {
   appendSkylarConversationTurn,
   listSkylarConversationMessages,
+  listSkylarConversationPage,
 } from "@/server/repositories/skylar-conversation.repository";
 
 const conversationInputSchema = z.object({
@@ -24,6 +25,7 @@ const conversationQuerySchema = z.object({
   employeeName: z.string().trim().max(120).optional(),
   cardTitle: z.string().trim().max(240).optional(),
   cardBody: z.string().trim().max(1200).optional(),
+  page: z.coerce.number().int().min(0).max(20).default(0),
 });
 
 function conversationError(error: unknown) {
@@ -42,10 +44,10 @@ export async function GET(request: NextRequest) {
     const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());
     const parsed = conversationQuerySchema.safeParse(searchParams);
     if (!parsed.success) throw new ValidationError("Invalid saved conversation context.");
-    const context = parsed.data;
-    const messages = await listSkylarConversationMessages(session, context);
+    const { page, ...context } = parsed.data;
+    const { messages, hasMore } = await listSkylarConversationPage(session, context, page);
 
-    return Response.json({ messages });
+    return Response.json({ messages, hasMore });
   } catch (error) {
     const response = toErrorResponse(conversationError(error));
     return Response.json(response.body, { status: response.status });
@@ -63,8 +65,11 @@ export async function POST(request: NextRequest) {
       maxRequests: env.AI_RATE_LIMIT_MAX_REQUESTS,
       windowMs: env.AI_RATE_LIMIT_WINDOW_MS,
     });
-    const history = await listSkylarConversationMessages(session, input);
-    const stream = await streamSkylarConversation(env, { ...input, history }).catch((error: unknown) => {
+    const isEmployee = session.role === "employee";
+    const history = isEmployee ? [] : await listSkylarConversationMessages(session, input);
+    // Employees only send a prompt; their name comes from the session, never from the client.
+    const chatInput = isEmployee ? { prompt: input.prompt, employeeName: session.displayName ?? undefined } : input;
+    const stream = await streamSkylarConversation(env, { ...chatInput, history, callerRole: session.role }).catch((error: unknown) => {
       throw conversationError(error);
     });
 
@@ -77,7 +82,7 @@ export async function POST(request: NextRequest) {
             assistantText += text;
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
           }
-          if (assistantText.trim()) {
+          if (assistantText.trim() && !isEmployee) {
             await appendSkylarConversationTurn(session, input, input.prompt, assistantText);
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));

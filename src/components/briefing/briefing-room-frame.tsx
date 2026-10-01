@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/briefing/account-menu";
 import { BriefingIndexNav, type IndexSection } from "@/components/briefing/briefing-index-nav";
+import { EmployeeSkylarChat } from "@/components/briefing/employee-skylar-chat";
 import { FloatingSkylarAction } from "@/components/briefing/floating-skylar-action";
 import { QuickActions } from "@/components/briefing/quick-actions";
 import { BILLING_PATH } from "@/constants/routes";
@@ -16,7 +17,7 @@ export async function BriefingRoomFrame({
   quickActionEmployeeId,
 }: {
   session: AuthSession;
-  active: IndexSection;
+  active: IndexSection | string;
   children: React.ReactNode;
   quickActionEmployeeId?: string;
 }) {
@@ -58,19 +59,23 @@ export async function BriefingRoomFrame({
                 Guided first. Jump when needed.
               </p>
             </div>
-            <BriefingIndexNav active={active} role={session.role} hideBilling={paymentGateDisabled} />
-            <div className="h-px bg-paper/10" />
-            <QuickActions
-              role={session.role}
-              employees={employeeOptions}
-              initialEmployeeId={quickActionEmployeeId}
-            />
+            <BriefingIndexNav active={active} role={session.role} linkedEmployeeId={session.linkedEmployeeId} />
+            {session.role === "admin" && (
+              <>
+                <div className="h-px bg-paper/10" />
+                <QuickActions
+                  role={session.role}
+                  employees={employeeOptions}
+                  initialEmployeeId={quickActionEmployeeId}
+                />
+              </>
+            )}
           </aside>
 
           <div className="skylar-page-content min-w-0">{children}</div>
         </section>
       </div>
-      <FloatingSkylarAction />
+      {session.role === "admin" ? <FloatingSkylarAction /> : <EmployeeSkylarChat />}
     </main>
   );
 }

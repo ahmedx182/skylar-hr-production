@@ -14,6 +14,7 @@ export const metadata: Metadata = { title: "Briefing" };
 
 export default async function BriefingPage() {
   const session = await requirePageSession();
+  if (session.role !== "admin") redirect(session.linkedEmployeeId ? `/people/${session.linkedEmployeeId}` : "/settings");
   const [employees, ledger, hiddenCardIds] = await Promise.all([
     listCompanyEmployees(session.companyId),
     listCompanyLedger(session.companyId),

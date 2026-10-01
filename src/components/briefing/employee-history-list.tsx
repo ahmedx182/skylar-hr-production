@@ -30,10 +30,12 @@ export function EmployeeHistoryList({
   employeeId,
   employeeName,
   ledger,
+  canChat,
 }: {
   employeeId: string;
   employeeName: string;
   ledger: HistoryLedgerRecord[];
+  canChat: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<HistoryFilter>("all");
@@ -149,7 +151,9 @@ export function EmployeeHistoryList({
               <span className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ${statusBadgeClass(note.statusDot)}`}>
                 {ledgerStatusLabel(note.statusDot)}
               </span>
-              <NoteAdvisorChatButton employeeId={employeeId} employeeName={employeeName} note={note.description} />
+              {canChat && (
+                <NoteAdvisorChatButton employeeId={employeeId} employeeName={employeeName} note={note.description} />
+              )}
             </div>
           </div>
         ))

@@ -20,6 +20,7 @@ const EMPLOYEES_COLLECTION = "employees";
 const LEDGER_COLLECTION = "employee_ledger_entries";
 const MAX_STORED_MESSAGES = 40;
 const DEFAULT_HISTORY_LIMIT = 12;
+const HISTORY_PAGE_SIZE = 15;
 
 function conversationDocId(session: AuthSession, context: SkylarConversationContext): string {
   return `${session.companyId}__${session.uid}__${skylarConversationThreadKey(context)}`;
@@ -115,6 +116,30 @@ export async function listSkylarConversationMessages(
     .filter((message): message is SkylarConversationMessage => Boolean(message))
     .sort((a, b) => a.createdAtMs - b.createdAtMs)
     .slice(-limit);
+}
+
+export async function listSkylarConversationPage(
+  session: AuthSession,
+  context: SkylarConversationContext,
+  page: number,
+): Promise<{ messages: SkylarConversationMessage[]; hasMore: boolean }> {
+  const doc = await adminDb().collection(CONVERSATIONS_COLLECTION).doc(conversationDocId(session, context)).get();
+  const data = doc.data();
+
+  if (!doc.exists || !data || data.companyId !== session.companyId || data.userId !== session.uid) {
+    return { messages: [], hasMore: false };
+  }
+
+  const rawMessages = Array.isArray(data.messages) ? data.messages : [];
+  const all = rawMessages
+    .map(messageFromData)
+    .filter((m): m is SkylarConversationMessage => Boolean(m))
+    .sort((a, b) => a.createdAtMs - b.createdAtMs);
+
+  const total = all.length;
+  const end = total - page * HISTORY_PAGE_SIZE;
+  const start = Math.max(0, end - HISTORY_PAGE_SIZE);
+  return { messages: all.slice(start, end), hasMore: start > 0 };
 }
 
 export async function appendSkylarConversationTurn(

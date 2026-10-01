@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   verifySessionCookie: vi.fn(),
   findUserById: vi.fn(),
   findCompanyNameById: vi.fn(),
+  findEmployeeIdByEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({
@@ -12,6 +13,7 @@ vi.mock("@/lib/firebase/admin", () => ({
 vi.mock("@/server/repositories/user.repository", () => ({
   findUserById: mocks.findUserById,
   findCompanyNameById: mocks.findCompanyNameById,
+  findEmployeeIdByEmail: mocks.findEmployeeIdByEmail,
 }));
 
 import { resolveSession } from "@/server/auth/resolve-session";
@@ -53,7 +55,22 @@ describe("resolveSession", () => {
       companyId: "company-a",
       companyName: "Acme",
       role: "manager",
+      linkedEmployeeId: null,
     });
+  });
+
+  it("links an unlinked employee to the employee file with the same work email", async () => {
+    mocks.findUserById.mockResolvedValue({ ...activeUser, role: "employee" });
+    mocks.findEmployeeIdByEmail.mockResolvedValue("emp-9");
+
+    expect(await resolveSession("cookie")).toMatchObject({ linkedEmployeeId: "emp-9" });
+    expect(mocks.findEmployeeIdByEmail).toHaveBeenCalledWith("company-a", "m@acme.com");
+  });
+
+  it("does not look up an employee file for non-employee roles", async () => {
+    await resolveSession("cookie");
+
+    expect(mocks.findEmployeeIdByEmail).not.toHaveBeenCalled();
   });
 
   it("ignores company and role claims carried by the cookie", async () => {

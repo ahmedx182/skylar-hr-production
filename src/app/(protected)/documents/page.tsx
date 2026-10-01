@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { CalendarClock, FileText } from "lucide-react";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import { DocumentsListClient } from "@/components/briefing/documents-list-client";
 import { SectionHero } from "@/components/briefing/section-hero";
 import { ledgerStatusLabel } from "@/features/briefing/status-label";
 import { requirePageSession } from "@/server/auth/require-session";
-import { listCompanyLedger } from "@/server/repositories/briefing-read.repository";
+import { listCompanyLedger, listEmployeeLedger } from "@/server/repositories/briefing-read.repository";
 
 export const metadata: Metadata = { title: "Documents" };
 
 export default async function DocumentsPage() {
   const session = await requirePageSession();
-  const ledger = await listCompanyLedger(session.companyId);
+  if (session.role !== "admin" && !session.linkedEmployeeId) redirect("/settings");
+  const ledger = session.role === "admin"
+    ? await listCompanyLedger(session.companyId)
+    : await listEmployeeLedger(session.companyId, session.linkedEmployeeId!);
 
   return (
     <BriefingRoomFrame session={session} active="Documents">

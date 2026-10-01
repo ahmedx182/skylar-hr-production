@@ -11,7 +11,10 @@ export type AppUser = z.infer<typeof appUserSchema> & { id: string };
 export interface AuthSession {
   uid: string;
   email: string | null;
+  displayName?: string | null;
   companyId: string;
   companyName?: string | null;
   role: Role;
+  /** Firestore employee record id linked to this user account. Set for employee-role users. */
+  linkedEmployeeId?: string | null;
 }

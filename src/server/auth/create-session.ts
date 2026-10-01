@@ -5,8 +5,13 @@ import { AuthenticationError } from "@/lib/errors";
 import { adminAuth } from "@/lib/firebase/admin";
 import {
   findUserById,
+  provisionInvitedUser,
   provisionSignupWorkspace,
 } from "@/server/repositories/user.repository";
+import {
+  acceptInvite,
+  findPendingInviteByEmail,
+} from "@/server/repositories/invite.repository";
 import { isFirebaseAuthError } from "./firebase-auth-error";
 import { assertSignupDomainAllowed } from "./signup-domain";
 
@@ -47,15 +52,23 @@ export async function createSession(
 
   const user = await findUserById(decoded.uid);
   if (!user || user.status !== "active") {
-    if (!signup) {
-      throw new AuthenticationError("This email has not been added to Skylar.");
+    if (signup) {
+      assertSignupDomainAllowed(email);
+      await provisionSignupWorkspace({ uid: decoded.uid, email, companyName: signup.companyName });
+    } else {
+      const invite = await findPendingInviteByEmail(email);
+      if (!invite) {
+        throw new AuthenticationError("This email has not been added to Skylar.");
+      }
+      await provisionInvitedUser({
+        uid: decoded.uid,
+        email,
+        companyId: invite.companyId,
+        role: invite.role,
+        linkedEmployeeId: invite.linkedEmployeeId,
+      });
+      await acceptInvite(invite.id);
     }
-    assertSignupDomainAllowed(email);
-    await provisionSignupWorkspace({
-      uid: decoded.uid,
-      email,
-      companyName: signup.companyName,
-    });
   }
 
   const cookie = await auth.createSessionCookie(idToken, {

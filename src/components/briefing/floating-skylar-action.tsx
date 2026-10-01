@@ -1,8 +1,9 @@
 "use client";
 
-import { ChevronsUpDown, LoaderCircle, Send, UserRound, X } from "lucide-react";
+import { ChevronsUpDown, LoaderCircle, RefreshCcw, Send, UserRound, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SkylarMessageText } from "@/components/briefing/skylar-message-text";
 
 type SkylarContext = {
   employeeId?: string;
@@ -27,6 +28,7 @@ type OpenSkylarEvent = CustomEvent<SkylarContext & { prompt?: string }>;
 
 type SavedConversationResponse = {
   messages?: SkylarMessage[];
+  hasMore?: boolean;
   error?: { message?: string };
 };
 
@@ -34,53 +36,6 @@ type PeopleResponse = {
   employees?: EmployeeOption[];
   error?: { message?: string };
 };
-
-function SkylarMessageText({ text }: { text: string }) {
-  const lines = text.replace(/\s+-\s+(?=\*\*)/g, "\n- ").split("\n");
-
-  return (
-    <div className="grid gap-2">
-      {lines.map((line, index) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <span key={`space-${index}`} className="h-1" aria-hidden="true" />;
-        if (trimmed.startsWith("#")) {
-          return (
-            <p key={`heading-${index}`} className="text-base font-semibold leading-6">
-              {formatSkylarInline(trimmed.replace(/^#+\s*/, ""))}
-            </p>
-          );
-        }
-        const numbered = trimmed.match(/^(\d+)\.\s+(.+)$/);
-        if (numbered) {
-          return (
-            <div key={`number-${index}`} className="grid grid-cols-[24px_minmax(0,1fr)] gap-2">
-              <span className="font-semibold tabular-nums text-ink/55">{numbered[1]}.</span>
-              <span>{formatSkylarInline(numbered[2])}</span>
-            </div>
-          );
-        }
-        if (trimmed.startsWith("- ")) {
-          return (
-            <div key={`bullet-${index}`} className="flex gap-2">
-              <span className="mt-[0.65em] size-1.5 shrink-0 rounded-full bg-ink/45" aria-hidden="true" />
-              <span>{formatSkylarInline(trimmed.slice(2))}</span>
-            </div>
-          );
-        }
-        return <p key={`line-${index}`}>{formatSkylarInline(trimmed)}</p>;
-      })}
-    </div>
-  );
-}
-
-function formatSkylarInline(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
-    }
-    return <span key={index}>{part}</span>;
-  });
-}
 
 const starterPrompts = [
   "Help me prepare this conversation",
@@ -132,6 +87,9 @@ export function FloatingSkylarAction() {
   const [messages, setMessages] = useState<SkylarMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastAutoPromptKeyRef = useRef<string | null>(null);
@@ -243,20 +201,26 @@ export function FloatingSkylarAction() {
     }
   }, [context, isLoading]);
 
+  const buildContextParams = useCallback((ctx: SkylarContext, page: number) => {
+    const params = new URLSearchParams();
+    if (ctx.employeeId) params.set("employeeId", ctx.employeeId);
+    if (ctx.employeeName) params.set("employeeName", ctx.employeeName);
+    if (ctx.cardTitle) params.set("cardTitle", ctx.cardTitle);
+    if (page > 0) params.set("page", String(page));
+    return params;
+  }, []);
+
   const loadSavedContext = useCallback(async (nextContext: SkylarContext, prompt?: string) => {
     setContext(nextContext);
     setMessages([]);
+    setHistoryPage(0);
+    setHasMore(false);
     setError("");
     setIsLoadingHistory(true);
     let savedMessages: SkylarMessage[] = [];
 
-    const params = new URLSearchParams();
-    if (nextContext.employeeId) params.set("employeeId", nextContext.employeeId);
-    if (nextContext.employeeName) params.set("employeeName", nextContext.employeeName);
-    if (nextContext.cardTitle) params.set("cardTitle", nextContext.cardTitle);
-
     try {
-      const response = await fetch(`/api/briefing/conversation?${params.toString()}`, {
+      const response = await fetch(`/api/briefing/conversation?${buildContextParams(nextContext, 0).toString()}`, {
         cache: "no-store",
         credentials: "same-origin",
       });
@@ -264,6 +228,7 @@ export function FloatingSkylarAction() {
       if (!response.ok) throw new Error(payload?.error?.message ?? "Skylar could not load saved context.");
       savedMessages = Array.isArray(payload?.messages) ? payload.messages : [];
       setMessages(savedMessages);
+      setHasMore(payload?.hasMore ?? false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Skylar could not load saved context.");
     } finally {
@@ -280,7 +245,29 @@ export function FloatingSkylarAction() {
         }
       }
     }
-  }, [sendMessage]);
+  }, [buildContextParams, sendMessage]);
+
+  const loadEarlierMessages = useCallback(async () => {
+    if (isLoadingEarlier || !hasMore) return;
+    setIsLoadingEarlier(true);
+    const nextPage = historyPage + 1;
+    try {
+      const response = await fetch(`/api/briefing/conversation?${buildContextParams(context, nextPage).toString()}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      const payload = (await response.json().catch(() => null)) as SavedConversationResponse | null;
+      if (!response.ok) throw new Error(payload?.error?.message ?? "Could not load earlier messages.");
+      const earlier = Array.isArray(payload?.messages) ? payload.messages : [];
+      setMessages((current) => [...earlier, ...current]);
+      setHistoryPage(nextPage);
+      setHasMore(payload?.hasMore ?? false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not load earlier messages.");
+    } finally {
+      setIsLoadingEarlier(false);
+    }
+  }, [buildContextParams, context, hasMore, historyPage, isLoadingEarlier]);
 
   function selectEmployee(employee: EmployeeOption) {
     const nextContext: SkylarContext = {
@@ -510,6 +497,19 @@ export function FloatingSkylarAction() {
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
             {isLoadingHistory && (
               <SkylarContextLoading />
+            )}
+            {!isLoadingHistory && hasMore && messages.length > 0 && (
+              <div className="mb-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => void loadEarlierMessages()}
+                  disabled={isLoadingEarlier}
+                  className="inline-flex items-center gap-2 rounded-full border border-paper/[0.08] bg-paper/[0.04] px-4 py-2 text-xs font-semibold text-paper-3 transition-colors hover:bg-paper/[0.08] hover:text-paper disabled:cursor-wait disabled:opacity-60"
+                >
+                  <RefreshCcw className={`size-3 ${isLoadingEarlier ? "animate-spin" : ""}`} aria-hidden="true" />
+                  {isLoadingEarlier ? "Loading…" : "Load earlier messages"}
+                </button>
+              </div>
             )}
             {messages.length === 0 && !isLoadingHistory && (
               <>

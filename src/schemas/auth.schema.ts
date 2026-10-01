@@ -39,4 +39,7 @@ export const appUserSchema = z.object({
   displayName: z.string().optional(),
   role: z.enum(ROLES),
   status: z.enum(["active", "disabled"]),
+  linkedEmployeeId: z.string().optional(),
+  /** Firestore Timestamp written at provisioning; absent on very old records. */
+  createdAt: z.custom<{ toDate(): Date }>((v) => typeof (v as { toDate?: unknown })?.toDate === "function").optional(),
 });
