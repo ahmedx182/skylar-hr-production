@@ -9,6 +9,7 @@ import {
   PEOPLE_PATH,
   SETTINGS_PATH,
 } from "@/constants/routes";
+import { formatBadgeCount } from "@/features/briefing/badge-count";
 import { cn } from "@/lib/utils/cn";
 import type { Role } from "@/types/auth";
 
@@ -90,10 +91,12 @@ export function BriefingIndexNav({
   active,
   role,
   linkedEmployeeId,
+  advisorOpenCount,
 }: {
   active: IndexSection | string;
   role: Role;
   linkedEmployeeId?: string | null;
+  advisorOpenCount?: number;
 }) {
   // Billing stays out of the sidebar; it is reachable from the account menu.
   const items =
@@ -108,6 +111,7 @@ export function BriefingIndexNav({
       {items.map((item) => {
         const Icon = item.icon;
         const isActive = item.label === active;
+        const badge = item.label === "Advisor" ? formatBadgeCount(advisorOpenCount) : null;
 
         return (
           <Link
@@ -131,11 +135,19 @@ export function BriefingIndexNav({
             <span className="min-w-0">
               <span
                 className={cn(
-                  "block truncate text-sm font-semibold text-paper",
+                  "flex items-center gap-2 text-sm font-semibold text-paper",
                   isActive && "text-ink",
                 )}
               >
-                {item.title}
+                <span className="truncate">{item.title}</span>
+                {badge && (
+                  <span
+                    aria-label={`${advisorOpenCount} open cases`}
+                    className="shrink-0 rounded-full bg-risk px-1.5 py-0.5 font-mono text-[10px] leading-none text-paper"
+                  >
+                    {badge}
+                  </span>
+                )}
               </span>
               <span
                 className={cn(

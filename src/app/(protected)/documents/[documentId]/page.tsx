@@ -79,7 +79,7 @@ export default async function DocumentDetailPage({
                 {note.type}
               </span>
               <span className="rounded-full bg-ink/[0.06] px-3 py-1.5 font-mono text-xs uppercase text-ink/55">
-                {ledgerStatusLabel(note.statusDot)}
+                {ledgerStatusLabel(note.statusDot, session.role === "admin" && note.isEscalated)}
               </span>
             </div>
             {session.role === "admin" && note.employeeId && (

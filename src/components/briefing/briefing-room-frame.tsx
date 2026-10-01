@@ -6,6 +6,7 @@ import { FloatingSkylarAction } from "@/components/briefing/floating-skylar-acti
 import { QuickActions } from "@/components/briefing/quick-actions";
 import { BILLING_PATH } from "@/constants/routes";
 import { getServerEnv } from "@/lib/env/server";
+import { countOpenEscalations } from "@/server/repositories/advisor-escalation.repository";
 import { listCompanyEmployees } from "@/server/repositories/briefing-read.repository";
 import { getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
 import type { AuthSession } from "@/types/auth";
@@ -27,7 +28,10 @@ export async function BriefingRoomFrame({
     if (billing.access === "billing_required") redirect(BILLING_PATH);
   }
 
-  const employees = await listCompanyEmployees(session.companyId);
+  const [employees, openEscalations] = await Promise.all([
+    listCompanyEmployees(session.companyId),
+    session.role === "admin" ? countOpenEscalations(session.companyId) : Promise.resolve(0),
+  ]);
   const employeeOptions = employees.map((employee) => ({
     id: employee.id,
     name: employee.name,
@@ -59,7 +63,7 @@ export async function BriefingRoomFrame({
                 Guided first. Jump when needed.
               </p>
             </div>
-            <BriefingIndexNav active={active} role={session.role} linkedEmployeeId={session.linkedEmployeeId} />
+            <BriefingIndexNav active={active} role={session.role} linkedEmployeeId={session.linkedEmployeeId} advisorOpenCount={openEscalations} />
             {session.role === "admin" && (
               <>
                 <div className="h-px bg-paper/10" />

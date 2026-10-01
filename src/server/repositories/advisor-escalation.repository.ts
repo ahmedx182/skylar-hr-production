@@ -306,6 +306,25 @@ export type EscalationAnalytics = {
   resolved: number;
 };
 
+/** Cases still waiting on the advisor (with advisor or draft saved). Returns 0 if the lookup fails. */
+export async function countOpenEscalations(companyId: string): Promise<number> {
+  try {
+    const snapshot = await adminDb()
+      .collection(ESCALATIONS_COLLECTION)
+      .where("companyId", "==", companyId)
+      .select("status")
+      .get();
+
+    return snapshot.docs.filter((doc) => {
+      const status = escalationStatus(doc.get("status"));
+      return status === "with_advisor" || status === "draft_response";
+    }).length;
+  } catch (error) {
+    console.error("Could not count open escalations", error);
+    return 0;
+  }
+}
+
 export async function getEscalationAnalytics(companyId: string): Promise<EscalationAnalytics> {
   const snapshot = await adminDb()
     .collection(ESCALATIONS_COLLECTION)

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, CalendarClock, CheckCircle2, FilePlus2, Flag, History, MapPin } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, FilePlus2, Flag, History, MapPin, ShieldAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import { CopyEmailButton } from "@/components/briefing/copy-email-button";
@@ -10,9 +10,12 @@ import { EditEmployeeProfile } from "@/components/briefing/edit-employee-profile
 import { EmployeeHistoryList } from "@/components/briefing/employee-history-list";
 import { PrintEmployeeFileButton } from "@/components/briefing/print-employee-file-button";
 import { NEW_NOTE_PATH, PEOPLE_PATH } from "@/constants/routes";
+import { isActiveEscalation, type AdvisorEscalationRecord } from "@/features/advisor/escalation-queue";
+import { employeePriority } from "@/features/briefing/employee-priority";
 import { ledgerStatusLabel } from "@/features/briefing/status-label";
 import { NotFoundError } from "@/lib/errors";
 import { requirePageSession } from "@/server/auth/require-session";
+import { listCompanyAdvisorEscalations } from "@/server/repositories/advisor-escalation.repository";
 import {
   getCompanyEmployee,
   listEmployeeLedger,
@@ -30,12 +33,20 @@ export default async function EmployeeProfilePage({
     redirect(session.linkedEmployeeId ? `/people/${session.linkedEmployeeId}` : "/settings");
   }
 
+  const canEdit = session.role === "admin";
   let employee;
   let ledger;
+  let escalations: AdvisorEscalationRecord[] = [];
   try {
-    [employee, ledger] = await Promise.all([
+    [employee, ledger, escalations] = await Promise.all([
       getCompanyEmployee(session.companyId, params.employeeId),
       listEmployeeLedger(session.companyId, params.employeeId),
+      // Escalation details are for admins only; employees never see them on their own file.
+      canEdit
+        ? listCompanyAdvisorEscalations(session.companyId).then((all) =>
+            all.filter((item) => item.employeeId === params.employeeId),
+          )
+        : Promise.resolve([] as AdvisorEscalationRecord[]),
     ]);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
@@ -51,9 +62,21 @@ export default async function EmployeeProfilePage({
     ? new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(employee.updatedAtMs)
     : "No activity yet";
   const detailChips = [employee.jobTitle, employee.location].filter(Boolean);
-  const currentState = ledger[0] ? ledgerStatusLabel(ledger[0].statusDot) : "No notes";
-  const currentPriority = priorityLabel(ledger[0]?.statusDot ?? null);
-  const canEdit = session.role === "admin";
+  const openEscalations = escalations.filter((item) => isActiveEscalation(item.status)).length;
+  const visibleLedger = canEdit ? ledger : ledger.map((entry) => ({ ...entry, isEscalated: false }));
+  const currentState = visibleLedger[0]
+    ? ledgerStatusLabel(visibleLedger[0].statusDot, visibleLedger[0].isEscalated)
+    : "No notes";
+  const currentPriority = employeePriority({
+    latestStatusDot: ledger[0]?.statusDot ?? null,
+    openEscalations,
+  });
+  const escalationSummary =
+    escalations.length === 0
+      ? null
+      : openEscalations > 0
+        ? `${openEscalations} open of ${escalations.length}`
+        : `${escalations.length} resolved`;
 
   return (
     <BriefingRoomFrame session={session} active="People" quickActionEmployeeId={employee.id}>
@@ -112,6 +135,7 @@ export default async function EmployeeProfilePage({
                   <CopyEmailButton email={employee.email} />
                   <ProfileMeta icon={Flag} label="Priority" value={currentPriority} />
                   <ProfileMeta icon={CheckCircle2} label="State" value={currentState} />
+                  {escalationSummary && <ProfileMeta icon={ShieldAlert} label="Escalations" value={escalationSummary} />}
                   <ProfileMeta icon={History} label="History" value={`${ledger.length} ${ledger.length === 1 ? "entry" : "entries"}`} />
                   {!employee.location && <ProfileMeta icon={MapPin} label="Location" value="Missing" />}
                   <ProfileMeta icon={CalendarClock} label="Last updated" value={lastUpdated} />
@@ -144,7 +168,7 @@ export default async function EmployeeProfilePage({
             <EmployeeHistoryList
               employeeId={employee.id}
               employeeName={employee.name}
-              ledger={ledger}
+              ledger={visibleLedger}
               canChat={canEdit}
             />
           </div>
@@ -152,13 +176,6 @@ export default async function EmployeeProfilePage({
       </section>
     </BriefingRoomFrame>
   );
-}
-
-function priorityLabel(statusDot: "amber" | "green" | "red" | null): string {
-  if (statusDot === "red") return "High";
-  if (statusDot === "amber") return "Follow-up";
-  if (statusDot === "green") return "Resolved";
-  return "Normal";
 }
 
 function ProfileMeta({

@@ -57,6 +57,16 @@ describe("buildDailyBriefingDeck", () => {
     expect(deck[1].actions.map((action) => action.kind)).toContain("open_file");
   });
 
+  it("marks an already escalated record as escalated and stops offering to escalate it", () => {
+    const deck = buildDailyBriefingDeck(session, {
+      employees: [employee({ id: "employee-1" })],
+      ledger: [ledger({ id: "risk-note", statusDot: "red", isEscalated: true })],
+    });
+
+    expect(deck[0].eyebrow).toBe("Escalated");
+    expect(deck[0].actions.map((action) => action.kind)).not.toContain("escalate");
+  });
+
   it("filters dismissed cards and keeps unrelated employee cards", () => {
     const deck = buildDailyBriefingDeck(
       session,

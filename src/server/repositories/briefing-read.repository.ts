@@ -25,6 +25,8 @@ export type LedgerRecord = {
   description: string;
   statusDot: "amber" | "green" | "red" | null;
   dateMs: number;
+  /** True once an advisor case has been opened for this entry. */
+  isEscalated?: boolean;
 };
 
 type EmployeeData = {
@@ -45,6 +47,7 @@ type LedgerData = {
   type?: unknown;
   description?: unknown;
   statusDot?: unknown;
+  advisorEscalationId?: unknown;
   date?: unknown;
   createdAt?: unknown;
 };
@@ -97,6 +100,7 @@ function ledgerFromDoc(doc: QueryDocumentSnapshot, employeeName: string | null):
     description: optionalString(data.description) ?? "No note text saved.",
     statusDot,
     dateMs: timestampMs(data.date) || timestampMs(data.createdAt),
+    isEscalated: optionalString(data.advisorEscalationId) !== null,
   };
 }
 

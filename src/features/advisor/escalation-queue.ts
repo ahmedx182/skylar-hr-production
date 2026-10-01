@@ -36,6 +36,11 @@ export type AdvisorQueueItem = {
   isActive: boolean;
 };
 
+/** A case is open while it is with the advisor or has a draft saved. */
+export function isActiveEscalation(status: AdvisorEscalationRecord["status"]): boolean {
+  return status === "with_advisor" || status === "draft_response";
+}
+
 export function advisorStatusLabel(status: AdvisorEscalationRecord["status"]): string {
   if (status === "draft_response") return "Draft saved";
   if (status === "responded") return "Responded";

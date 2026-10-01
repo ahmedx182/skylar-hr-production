@@ -34,7 +34,7 @@ export default async function DocumentsPage() {
               label: entry.type,
               title: entry.employeeName ?? "Employee record",
               body: entry.description,
-              meta: ledgerStatusLabel(entry.statusDot),
+              meta: ledgerStatusLabel(entry.statusDot, session.role === "admin" && entry.isEscalated),
               href: `/documents/${entry.id}`,
             }))}
           />

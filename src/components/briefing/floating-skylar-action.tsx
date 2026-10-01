@@ -3,6 +3,7 @@
 import { ChevronsUpDown, LoaderCircle, RefreshCcw, Send, UserRound, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AttachFileButton } from "@/components/briefing/attach-file-button";
 import { SkylarMessageText } from "@/components/briefing/skylar-message-text";
 
 type SkylarContext = {
@@ -553,6 +554,7 @@ export function FloatingSkylarAction() {
               Message Skylar
             </label>
             <div className="flex items-end gap-2 rounded-xl bg-paper/[0.04] p-2 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.055),inset_0_1px_0_rgba(244,239,231,0.035)]">
+              <AttachFileButton />
               <textarea
                 id="skylar-chat-input"
                 value={draft}

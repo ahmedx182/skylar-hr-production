@@ -1,6 +1,7 @@
 export type LedgerStatusDot = "amber" | "green" | "red" | null;
 
-export function ledgerStatusLabel(statusDot: LedgerStatusDot): string {
+export function ledgerStatusLabel(statusDot: LedgerStatusDot, isEscalated?: boolean): string {
+  if (isEscalated) return "Escalated to advisor";
   if (statusDot === "green") return "Resolved";
   if (statusDot === "red") return "Needs review";
   if (statusDot === "amber") return "Needs follow-up";

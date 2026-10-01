@@ -2,6 +2,7 @@
 
 import { LoaderCircle, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { AttachFileButton } from "@/components/briefing/attach-file-button";
 import { SkylarMessageText } from "@/components/briefing/skylar-message-text";
 
 type ChatMessage = { role: "user" | "assistant"; text: string };
@@ -167,6 +168,7 @@ export function EmployeeSkylarChat() {
               Message Skylar
             </label>
             <div className="flex items-end gap-2 rounded-xl bg-paper/[0.04] p-2 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.055),inset_0_1px_0_rgba(244,239,231,0.035)]">
+              <AttachFileButton />
               <textarea
                 id="employee-skylar-input"
                 value={draft}

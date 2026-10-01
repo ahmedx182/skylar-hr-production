@@ -3,6 +3,8 @@ import { z } from "zod";
 import { AppError, ExternalServiceError, toErrorResponse, ValidationError } from "@/lib/errors";
 import { getServerEnv } from "@/lib/env/server";
 import { assertWithinRateLimit } from "@/server/ai/rate-limit";
+import { buildEscalationNotice } from "@/features/briefing/chat-escalation";
+import { escalateFromChat } from "@/server/ai/chat-escalation";
 import { streamSkylarConversation } from "@/server/ai/skylar-conversation";
 import { requireSession } from "@/server/auth/require-session";
 import { parseJsonBody } from "@/server/http/parse-json-body";
@@ -69,7 +71,11 @@ export async function POST(request: NextRequest) {
     const history = isEmployee ? [] : await listSkylarConversationMessages(session, input);
     // Employees only send a prompt; their name comes from the session, never from the client.
     const chatInput = isEmployee ? { prompt: input.prompt, employeeName: session.displayName ?? undefined } : input;
-    const stream = await streamSkylarConversation(env, { ...chatInput, history, callerRole: session.role }).catch((error: unknown) => {
+    // Managers: high-risk messages are escalated server-side and the bot is told what happened.
+    const escalationNotice = isEmployee
+      ? undefined
+      : buildEscalationNotice(await escalateFromChat(session, { prompt: input.prompt, employeeId: input.employeeId })) ?? undefined;
+    const stream = await streamSkylarConversation(env, { ...chatInput, history, callerRole: session.role, escalationNotice }).catch((error: unknown) => {
       throw conversationError(error);
     });
 

@@ -13,6 +13,7 @@ type HistoryLedgerRecord = {
   description: string;
   statusDot: "amber" | "green" | "red" | null;
   dateMs: number;
+  isEscalated?: boolean;
 };
 
 type HistoryFilter = "all" | "needs_follow_up" | "resolved" | "high_attention" | "conversation" | "note";
@@ -45,7 +46,7 @@ export function EmployeeHistoryList({
     return ledger.filter((note) => {
       const matchesQuery =
         !normalizedQuery ||
-        `${note.type} ${note.description} ${ledgerStatusLabel(note.statusDot)}`
+        `${note.type} ${note.description} ${ledgerStatusLabel(note.statusDot, note.isEscalated)}`
           .toLowerCase()
           .includes(normalizedQuery);
       const matchesFilter =
@@ -149,7 +150,7 @@ export function EmployeeHistoryList({
             </Link>
             <div className="flex flex-wrap items-center gap-2 md:justify-end">
               <span className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ${statusBadgeClass(note.statusDot)}`}>
-                {ledgerStatusLabel(note.statusDot)}
+                {ledgerStatusLabel(note.statusDot, note.isEscalated)}
               </span>
               {canChat && (
                 <NoteAdvisorChatButton employeeId={employeeId} employeeName={employeeName} note={note.description} />

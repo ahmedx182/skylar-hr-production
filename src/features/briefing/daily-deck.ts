@@ -38,14 +38,22 @@ function ledgerCard(record: LedgerRecord): BriefingCard {
     { label: "Prepare", kind: "prepare", tone: "attention" },
     { label: isConversation ? "Open transcript" : "Open note", kind: "open_file" },
     { label: "Open profile", kind: "open_profile" },
-    ...(tone === "risk" ? [{ label: "Hold to escalate", kind: "escalate" as const, tone: "risk" as const }] : []),
+    ...(tone === "risk" && !record.isEscalated
+      ? [{ label: "Hold to escalate", kind: "escalate" as const, tone: "risk" as const }]
+      : []),
     { label: "Next", kind: "next" },
     { label: "Not now", kind: "not_now" },
   ];
 
   return {
     id: `ledger:${record.id}`,
-    eyebrow: tone === "risk" ? "High attention" : tone === "success" ? "Recently saved" : "Follow-up",
+    eyebrow: record.isEscalated
+      ? "Escalated"
+      : tone === "risk"
+        ? "High attention"
+        : tone === "success"
+          ? "Recently saved"
+          : "Follow-up",
     title: isConversation
       ? record.employeeName
         ? `Review the saved Skylar conversation for ${record.employeeName}.`
