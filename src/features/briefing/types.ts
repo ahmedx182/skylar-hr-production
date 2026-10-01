@@ -15,6 +15,12 @@ export type BriefingAction = {
   tone?: BriefingTone;
 };
 
+export type GuideStep = {
+  label: string;
+  title: string;
+  body: string;
+};
+
 export type BriefingCard = {
   id: string;
   eyebrow: string;
@@ -28,4 +34,6 @@ export type BriefingCard = {
   actions: BriefingAction[];
   employeeId?: string;
   ledgerEntryId?: string;
+  /** Conversation guide specific to this brief; the card falls back to a generic guide when absent. */
+  guide?: GuideStep[];
 };

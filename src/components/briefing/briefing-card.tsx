@@ -219,7 +219,7 @@ export function BriefingCard({
           <section className="rounded-2xl bg-ink/[0.04] p-4">
             <p className="font-mono text-xs uppercase text-ink/45">Conversation guide</p>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {guideSteps.map((step, index) => (
+              {(card.guide ?? guideSteps.map((step) => ({ ...step, body: step.body.replace("Maya", subjectName) }))).map((step, index) => (
                 <div key={step.label} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3">
                   <span className="grid size-8 place-items-center rounded-full bg-paper font-mono text-xs font-semibold text-ink shadow-[inset_0_0_0_1px_rgba(11,11,14,0.08)]">
                     {index + 1}
@@ -227,7 +227,7 @@ export function BriefingCard({
                   <div>
                     <p className="text-sm font-semibold">{step.title}</p>
                     <p className="mt-1 text-sm leading-5 text-ink/65">
-                      {step.body.replace("Maya", subjectName)}
+                      {step.body}
                     </p>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import type { EmployeeRecord, LedgerRecord } from "@/server/repositories/briefing-read.repository";
 import type { AuthSession } from "@/types/auth";
+import { employeeFileGuide, ledgerGuide } from "./conversation-guide";
 import type { BriefingCard, BriefingTone } from "./types";
 
 type BriefingRecords = {
@@ -59,6 +60,7 @@ function ledgerCard(record: LedgerRecord): BriefingCard {
     tone,
     employeeId: record.employeeId || undefined,
     ledgerEntryId: record.id,
+    guide: ledgerGuide({ tone, type: record.type, employeeName: record.employeeName }),
     actions,
   };
 }
@@ -77,6 +79,7 @@ function employeeCard(record: EmployeeRecord): BriefingCard {
     dueLabel: dateLabel(record.updatedAtMs),
     tone: "neutral",
     employeeId: record.id,
+    guide: employeeFileGuide(record.name),
     actions: [
       { label: "Prepare", kind: "prepare" },
       { label: "Open profile", kind: "open_profile" },
