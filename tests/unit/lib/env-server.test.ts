@@ -85,13 +85,6 @@ describe("getServerEnv", () => {
     });
   });
 
-  it("parses signup allowed domains from a comma-separated list", async () => {
-    stubEnv({ SIGNUP_ALLOWED_DOMAINS: " artilence.com, Example.COM ,, " });
-    const getServerEnv = await loadGetServerEnv();
-
-    expect(getServerEnv().SIGNUP_ALLOWED_DOMAINS).toEqual(["artilence.com", "example.com"]);
-  });
-
   it("keeps Stripe settings optional for local builds", async () => {
     stubEnv({
       STRIPE_SECRET_KEY: "",

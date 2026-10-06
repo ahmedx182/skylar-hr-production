@@ -1,9 +1,12 @@
 "use server";
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
+import { SETTINGS_PATH } from "@/constants/routes";
 import { getServerEnv } from "@/lib/env/server";
+import { toErrorResponse } from "@/lib/errors";
 import { requireSession } from "@/server/auth/require-session";
 import { sendInviteEmail } from "@/server/email/invite-notification";
-import { createInvite } from "@/server/repositories/invite.repository";
+import { cancelInvite, createInvite } from "@/server/repositories/invite.repository";
 
 const inviteInputSchema = z.object({
   email: z.string().trim().email("Enter a valid email address."),
@@ -33,16 +36,37 @@ export async function createInviteAction(_prev: InviteState | null, formData: Fo
     await createInvite(session, email, role, linkedEmployeeId ?? null);
 
     const env = getServerEnv();
-    await sendInviteEmail({
+    const emailResult = await sendInviteEmail({
       toEmail: email,
       companyName: session.companyName ?? "your workspace",
       role,
       appUrl: env.NEXT_PUBLIC_APP_URL.replace(/\/$/, ""),
     });
 
+    revalidatePath(SETTINGS_PATH);
+    if (emailResult.status !== "sent") {
+      return {
+        ok: true,
+        message: `Invite created for ${email}, but the email could not be sent automatically. Share the sign-in link with them directly.`,
+      };
+    }
     return { ok: true, message: `Invite sent to ${email}.` };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to send invite.";
     return { ok: false, message };
+  }
+}
+
+export type CancelInviteState = { ok: true; message: string } | { ok: false; message: string };
+
+export async function cancelInviteAction(inviteId: string): Promise<CancelInviteState> {
+  try {
+    const session = await requireSession();
+    await cancelInvite(session, inviteId);
+    revalidatePath(SETTINGS_PATH);
+    return { ok: true, message: "Invite cancelled." };
+  } catch (error) {
+    const response = toErrorResponse(error);
+    return { ok: false, message: response.body.error.message };
   }
 }

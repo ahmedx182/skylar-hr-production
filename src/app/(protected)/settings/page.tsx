@@ -13,15 +13,18 @@ import { adminAuth } from "@/lib/firebase/admin";
 import { requirePageSession } from "@/server/auth/require-session";
 import { listCompanyPendingInvites } from "@/server/repositories/invite.repository";
 import { findUserById, listCompanyUsers } from "@/server/repositories/user.repository";
+import { getWorkspaceDomains } from "@/server/auth/workspace-domain";
+import { toTeamMember } from "@/features/auth/team-member";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const session = await requirePageSession();
-  const [user, companyUsers, pendingInvites] = await Promise.all([
+  const [user, companyUsers, pendingInvites, allowedEmailDomains] = await Promise.all([
     findUserById(session.uid),
     session.role === "admin" ? listCompanyUsers(session.companyId) : Promise.resolve([]),
     session.role === "admin" ? listCompanyPendingInvites(session.companyId) : Promise.resolve([]),
+    session.role === "admin" ? getWorkspaceDomains(session.companyId) : Promise.resolve([]),
   ]);
   const workspaceName = companyDisplayName(session);
   const paymentGateDisabled = getServerEnv().DEMO_DISABLE_PAYMENT_GATE;
@@ -102,6 +105,7 @@ export default async function SettingsPage() {
                 displayName={user?.displayName ?? ""}
                 companyName={workspaceName}
                 canEditCompany={isAdmin}
+                allowedEmailDomains={allowedEmailDomains}
               />
             </div>
           </>
@@ -129,7 +133,7 @@ export default async function SettingsPage() {
                     Change a member&apos;s role between admin and employee.
                   </p>
                   <div className="mt-4">
-                    <UserRoleManager users={companyUsers} currentUid={session.uid} />
+                    <UserRoleManager users={companyUsers.map(toTeamMember)} currentUid={session.uid} />
                   </div>
                 </div>
               )}

@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, ArrowUpRight, CheckCircle2, FileText, ShieldAlert, Users, Zap } from "lucide-react";
-import { BRIEFING_PATH, LOGIN_PATH, PRIVACY_PATH, TERMS_PATH } from "@/constants/routes";
+import { BRIEFING_PATH, LOGIN_PATH, PRIVACY_PATH, SIGNUP_PATH, TERMS_PATH } from "@/constants/routes";
 import { getSession } from "@/server/auth/get-session";
 
 export default async function MarketingPage() {
@@ -30,7 +30,7 @@ export default async function MarketingPage() {
               Sign in
             </Link>
             <Link
-              href={LOGIN_PATH}
+              href={SIGNUP_PATH}
               className="inline-flex h-[34px] items-center gap-2 rounded-full bg-paper px-5 text-[13px] font-semibold text-[#0d0b09] transition-opacity hover:opacity-90"
             >
               Get started
@@ -76,7 +76,7 @@ export default async function MarketingPage() {
 
                 <div className="lp-fade-up lp-d-300 mt-10 flex flex-wrap items-center gap-4">
                   <Link
-                    href={LOGIN_PATH}
+                    href={SIGNUP_PATH}
                     className="group inline-flex h-11 items-center gap-2 rounded-full bg-paper px-7 text-sm font-semibold text-[#0d0b09] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_24px_rgba(244,239,231,0.14)] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_12px_36px_rgba(244,239,231,0.24)]"
                   >
                     Start free — 14 days
@@ -276,7 +276,7 @@ export default async function MarketingPage() {
                   to filed plan in minutes.
                 </h2>
               </div>
-              <Link href={LOGIN_PATH} className="inline-flex items-center gap-1.5 text-sm text-paper/35 transition-colors duration-200 hover:text-paper">
+              <Link href={SIGNUP_PATH} className="inline-flex items-center gap-1.5 text-sm text-paper/35 transition-colors duration-200 hover:text-paper">
                 Start free trial <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
@@ -345,7 +345,7 @@ export default async function MarketingPage() {
                   <p className="mt-1 text-xs text-paper/25">per workspace · billed monthly</p>
 
                   <Link
-                    href={LOGIN_PATH}
+                    href={SIGNUP_PATH}
                     className="mt-7 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-paper text-sm font-semibold text-[#0d0b09] transition-opacity hover:opacity-90"
                   >
                     Start 14-day free trial
@@ -390,7 +390,7 @@ export default async function MarketingPage() {
                   No setup. No configuration. Tell Skylar what&apos;s going on and your first briefing is ready in minutes.
                 </p>
                 <Link
-                  href={LOGIN_PATH}
+                  href={SIGNUP_PATH}
                   className="mt-9 inline-flex h-11 items-center gap-2 rounded-full bg-paper px-10 text-sm font-semibold text-[#0d0b09] shadow-[0_4px_24px_rgba(244,239,231,0.18)] transition-all hover:opacity-90"
                 >
                   Start free — 14 days

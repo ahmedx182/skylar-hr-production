@@ -10,6 +10,8 @@ or chat application.
 The current build includes:
 
 - Passwordless Firebase email-link sign-in.
+- Organization owner signup at `/signup`: workspace name, verified work email,
+  first admin access, a 14-day trial, and onboarding. Links support other devices.
 - Active-user allowlisting before a magic link can be requested.
 - Secure server sessions with protected server-rendered routes.
 - Two application roles: `admin` and `employee`.
@@ -21,6 +23,16 @@ The current build includes:
 - Searchable employee selection when creating a note.
 - Account menu, logout, quick actions, and the Ask Skylar interaction surface.
 - Top-of-page loading progress and lightweight transitions without blur effects.
+
+Owner signup is open to verified email addresses. Each new workspace starts with
+its owner's email domain in `allowedEmailDomains`. Admins manage domains in
+Settings → Profile and add employees or send invitations from their workspace.
+An empty domain list permits any domain, but does not grant automatic access.
+Existing workspaces without a domain list keep this unrestricted-domain behavior.
+Employee access and new invitations follow that workspace's domains. Admins keep
+access to manage settings. Each account belongs to one workspace; cross-workspace
+account reassignment is rejected. Signup uses a Firestore transaction to prevent
+duplicate workspaces for the same account.
 
 The first Claude conversation slice is implemented behind the briefing card's
 Prepare conversation action. Add `ANTHROPIC_API_KEY` to enable it; without the

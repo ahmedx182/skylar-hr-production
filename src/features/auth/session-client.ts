@@ -9,7 +9,10 @@ export async function createServerSession(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken, signup }),
   });
-  if (!response.ok) throw new Error(`Session request failed (${response.status})`);
+  if (!response.ok) {
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.error?.message || "Could not complete sign-in. Request a new link and try again.");
+  }
 }
 
 export async function endServerSession(): Promise<void> {

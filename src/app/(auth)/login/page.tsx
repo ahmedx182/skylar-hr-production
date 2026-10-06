@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
-import { BRIEFING_PATH, PRIVACY_PATH, TERMS_PATH } from "@/constants/routes";
+import { BRIEFING_PATH, PRIVACY_PATH, SIGNUP_PATH, TERMS_PATH } from "@/constants/routes";
 import { getSession } from "@/server/auth/get-session";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -113,6 +113,9 @@ export default async function LoginPage() {
             </p>
 
             <LoginForm />
+            <p className="mt-6 text-sm text-paper-2">
+              Own an organization? <Link href={SIGNUP_PATH} className="font-semibold text-sun underline underline-offset-4">Create a workspace</Link>
+            </p>
           </div>
 
           <div className="mt-5 grid gap-3 text-sm text-paper-2 sm:grid-cols-2">

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   findUserById: vi.fn(),
   findCompanyNameById: vi.fn(),
   findEmployeeIdByEmail: vi.fn(),
+  assertWorkspaceEmailAllowed: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({
@@ -16,7 +17,10 @@ vi.mock("@/server/repositories/user.repository", () => ({
   findEmployeeIdByEmail: mocks.findEmployeeIdByEmail,
 }));
 
+vi.mock("@/server/auth/workspace-domain", () => ({ assertWorkspaceEmailAllowed: mocks.assertWorkspaceEmailAllowed }));
+
 import { resolveSession } from "@/server/auth/resolve-session";
+import { AuthorizationError } from "@/lib/errors";
 
 const firebaseAuthError = Object.assign(new Error("expired"), {
   code: "auth/session-cookie-expired",
@@ -116,5 +120,18 @@ describe("resolveSession", () => {
     mocks.findUserById.mockResolvedValue({ ...activeUser, status: "disabled" });
 
     expect(await resolveSession("cookie")).toBeNull();
+  });
+
+  it("revokes employee access when their domain is removed from workspace settings", async () => {
+    mocks.findUserById.mockResolvedValue({ ...activeUser, role: "employee" });
+    mocks.assertWorkspaceEmailAllowed.mockRejectedValue(new AuthorizationError());
+    expect(await resolveSession("cookie")).toBeNull();
+    expect(mocks.assertWorkspaceEmailAllowed).toHaveBeenCalledWith("company-a", "m@acme.com");
+  });
+
+  it("keeps admins able to manage workspace domain settings", async () => {
+    mocks.findUserById.mockResolvedValue({ ...activeUser, role: "admin" });
+    await resolveSession("cookie");
+    expect(mocks.assertWorkspaceEmailAllowed).not.toHaveBeenCalled();
   });
 });

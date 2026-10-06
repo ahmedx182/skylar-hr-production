@@ -1,8 +1,9 @@
 import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
-import { AuthorizationError, ConflictError } from "@/lib/errors";
+import { AuthorizationError, ConflictError, NotFoundError } from "@/lib/errors";
 import { adminDb } from "@/lib/firebase/admin";
 import type { AuthSession } from "@/types/auth";
+import { assertWorkspaceEmailAllowed } from "@/server/auth/workspace-domain";
 
 const INVITES_COLLECTION = "invites";
 const USERS_COLLECTION = "users";
@@ -44,21 +45,24 @@ export async function createInvite(
 
   const db = adminDb();
   const normalizedEmail = email.trim().toLowerCase();
+  await assertWorkspaceEmailAllowed(session.companyId, normalizedEmail);
+  if (linkedEmployeeId) {
+    const employee = await db.collection("employees").doc(linkedEmployeeId).get();
+    if (!employee.exists || employee.get("companyId") !== session.companyId) throw new AuthorizationError("Employee is not in your workspace.");
+  }
 
   const existingUser = await db
     .collection(USERS_COLLECTION)
     .where("email", "==", normalizedEmail)
-    .where("companyId", "==", session.companyId)
     .limit(1)
     .get();
   if (!existingUser.empty) {
-    throw new ConflictError("This person already has an account in your workspace.");
+    throw new ConflictError("This email already has a workspace account.");
   }
 
   const existingInvite = await db
     .collection(INVITES_COLLECTION)
     .where("email", "==", normalizedEmail)
-    .where("companyId", "==", session.companyId)
     .where("status", "==", "pending")
     .limit(1)
     .get();
@@ -98,11 +102,12 @@ export async function findPendingInviteByEmail(email: string): Promise<CompanyIn
     .where("email", "==", normalizedEmail)
     .where("status", "==", "pending")
     .orderBy("createdAt", "desc")
-    .limit(1)
+    .limit(2)
     .get();
 
   const doc = snapshot.docs[0];
   if (!doc) return null;
+  if (snapshot.docs.length > 1) throw new ConflictError("Multiple workspace invitations exist for this email. Contact the workspace admins.");
   return inviteFromData(doc.id, doc.data() as Record<string, unknown>);
 }
 
@@ -111,6 +116,22 @@ export async function acceptInvite(inviteId: string): Promise<void> {
     .collection(INVITES_COLLECTION)
     .doc(inviteId)
     .set({ status: "accepted", acceptedAt: FieldValue.serverTimestamp() }, { merge: true });
+}
+
+export async function cancelInvite(session: AuthSession, inviteId: string): Promise<void> {
+  if (session.role !== "admin") throw new AuthorizationError();
+
+  const ref = adminDb().collection(INVITES_COLLECTION).doc(inviteId);
+  const snapshot = await ref.get();
+  const data = snapshot.data();
+  if (!snapshot.exists || !data || data.companyId !== session.companyId) {
+    throw new NotFoundError("Invite not found.");
+  }
+  if (data.status !== "pending") {
+    throw new ConflictError("This invite is no longer pending.");
+  }
+
+  await ref.delete();
 }
 
 export async function listCompanyPendingInvites(companyId: string): Promise<CompanyInvite[]> {

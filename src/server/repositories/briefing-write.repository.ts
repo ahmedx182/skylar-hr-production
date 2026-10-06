@@ -1,7 +1,7 @@
 import "server-only";
 import { FieldValue, type QueryDocumentSnapshot, type Transaction } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { ConflictError, NotFoundError } from "@/lib/errors";
+import { AuthorizationError, ConflictError, NotFoundError } from "@/lib/errors";
 import {
   buildEmployeeMemorySummary,
   type EmployeeMemoryLedgerItem,
@@ -14,6 +14,8 @@ import type {
   UpdateNoteInput,
 } from "@/schemas/briefing-write.schema";
 import type { AuthSession } from "@/types/auth";
+
+import { assertWorkspaceEmailAllowed } from "@/server/auth/workspace-domain";
 
 const EMPLOYEES_COLLECTION = "employees";
 const LEDGER_COLLECTION = "employee_ledger_entries";
@@ -83,12 +85,14 @@ export async function createEmployeeRecord(
 ): Promise<{ id: string; employeeCode: string }> {
   const now = FieldValue.serverTimestamp();
   const db = adminDb();
+  await assertWorkspaceEmailAllowed(session.companyId, input.email);
   await assertUniqueEmployeeEmail(session.companyId, input.email);
   const ref = db.collection(EMPLOYEES_COLLECTION).doc();
   const userId = await workspaceUserIdForEmail(input.email, input.name);
   const userRef = db.collection(USERS_COLLECTION).doc(userId);
-  const userSnapshot = await userRef.get();
   const code = await db.runTransaction(async (transaction) => {
+    const userSnapshot = await transaction.get(userRef);
+    assertUserWorkspace(userSnapshot.exists ? userSnapshot.data() : undefined, session.companyId);
     const nextCode = await nextEmployeeCode(transaction, session.companyId);
     transaction.set(ref, {
       companyId: session.companyId,
@@ -107,56 +111,35 @@ export async function createEmployeeRecord(
       updatedAt: now,
       createdBy: session.uid,
     });
-    return nextCode;
-  });
-
-  if (userSnapshot.exists) {
-    await userRef.set(
-      {
-        companyId: session.companyId,
-        email: input.email,
-        displayName: input.name,
-        status: "active",
-      },
-      { merge: true },
-    );
-  } else {
-    await userRef.set({
+    transaction.set(userRef, {
       companyId: session.companyId,
       email: input.email,
       displayName: input.name,
-      role: "employee",
-      status: "active",
-    });
-  }
+      ...(!userSnapshot.exists ? { role: "employee", status: "active" } : {}),
+    }, { merge: true });
+    return nextCode;
+  });
 
   return { id: ref.id, employeeCode: code };
 }
 
+function assertUserWorkspace(user: Record<string, unknown> | undefined, companyId: string) {
+  if (user && user.companyId !== companyId) throw new ConflictError("This email already belongs to another workspace.");
+  if (user && user.status !== "active") throw new AuthorizationError("This account is disabled.");
+}
+
 async function upsertWorkspaceUser(session: AuthSession, email: string, displayName: string) {
+  await assertWorkspaceEmailAllowed(session.companyId, email);
   const userId = await workspaceUserIdForEmail(email, displayName);
-  const userRef = adminDb().collection(USERS_COLLECTION).doc(userId);
-  const userSnapshot = await userRef.get();
-
-  if (userSnapshot.exists) {
-    await userRef.set(
-      {
-        companyId: session.companyId,
-        email,
-        displayName,
-        status: "active",
-      },
-      { merge: true },
-    );
-    return;
-  }
-
-  await userRef.set({
-    companyId: session.companyId,
-    email,
-    displayName,
-    role: "employee",
-    status: "active",
+  const db = adminDb();
+  const userRef = db.collection(USERS_COLLECTION).doc(userId);
+  await db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(userRef);
+    assertUserWorkspace(snapshot.exists ? snapshot.data() : undefined, session.companyId);
+    transaction.set(userRef, {
+      companyId: session.companyId, email, displayName,
+      ...(!snapshot.exists ? { role: "employee", status: "active" } : {}),
+    }, { merge: true });
   });
 }
 
@@ -201,7 +184,9 @@ export async function updateEmployeeRecord(
     throw new NotFoundError("Employee not found.");
   }
   if (input.email) {
+    await assertWorkspaceEmailAllowed(session.companyId, input.email);
     await assertUniqueEmployeeEmail(session.companyId, input.email, input.employeeId);
+    await upsertWorkspaceUser(session, input.email, input.name);
   }
 
   await ref.update({
@@ -218,10 +203,6 @@ export async function updateEmployeeRecord(
     updatedAt: now,
     updatedBy: session.uid,
   });
-
-  if (input.email) {
-    await upsertWorkspaceUser(session, input.email, input.name);
-  }
 
   return { id: input.employeeId };
 }

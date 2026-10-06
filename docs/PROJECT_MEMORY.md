@@ -42,7 +42,10 @@ confirmed.
 ## Implemented Now
 
 - Passwordless Firebase email-link authentication.
-- Approved-domain new workspace signup using `SIGNUP_ALLOWED_DOMAINS`.
+- Owner workspace signup at `/signup`, seeding `allowedEmailDomains` per company
+  in Firestore (replaces the old static `SIGNUP_ALLOWED_DOMAINS` env var).
+- Admin team invite flow in Settings → Team: send/cancel invites, role
+  management, per-workspace domain allowlist editing in Settings → Profile.
 - Active-user allowlist before requesting sign-in links.
 - Secure server session cookies and protected server-rendered routes.
 - Server-side role and company authorization.
@@ -145,7 +148,6 @@ Highest priority before a Thursday client release:
 Still remaining beyond the current web-app task batch:
 
 - Real Skylar-side advisor role/access model.
-- Team/manager seat invite flow if still required for release.
 - Marketing/public pages if client expects them before launch.
 - Production monitoring, backups, rollback checklist, and support triage.
 - Capacitor iOS/Android builds, push notifications, deep links, store metadata,

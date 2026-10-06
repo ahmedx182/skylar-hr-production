@@ -5,6 +5,8 @@ import { adminDb } from "@/lib/firebase/admin";
 import { appUserSchema, type AccountSettingsInput } from "@/schemas/auth.schema";
 import { AuthorizationError, NotFoundError } from "@/lib/errors";
 import type { AppUser, AuthSession } from "@/types/auth";
+import { emailDomain } from "@/schemas/workspace-domain.schema";
+import { assertWorkspaceEmailAllowed } from "@/server/auth/workspace-domain";
 
 const COMPANIES_COLLECTION = "companies";
 const USERS_COLLECTION = "users";
@@ -62,13 +64,6 @@ export async function provisionSignupWorkspace({
 }): Promise<AppUser> {
   const db = adminDb();
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
-  const userSnapshot = await userRef.get();
-
-  if (userSnapshot.exists) {
-    const existingUser = { id: userSnapshot.id, ...appUserSchema.parse(userSnapshot.data()) };
-    if (existingUser.status === "active") return existingUser;
-  }
-
   const now = FieldValue.serverTimestamp();
   const trialEndsAt = Timestamp.fromMillis(trialEndsAtFromCreatedAt(Date.now(), TRIAL_DAYS));
   const companyRef = db.collection(COMPANIES_COLLECTION).doc();
@@ -82,27 +77,33 @@ export async function provisionSignupWorkspace({
     status: "active",
   };
 
-  const batch = db.batch();
-  batch.set(companyRef, {
-    name: companyName,
-    subscriptionStatus: "trialing",
-    trialEndsAt,
-    createdAt: now,
-    createdBy: uid,
-    onboardingSource: "email_link_signup",
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(userRef);
+    if (snapshot.exists) {
+      const existing = { id: snapshot.id, ...appUserSchema.parse(snapshot.data()) };
+      if (existing.status !== "active") throw new AuthorizationError("This account is disabled.");
+      return existing;
+    }
+    transaction.set(companyRef, {
+      allowedEmailDomains: [emailDomain(email)],
+      name: companyName,
+      subscriptionStatus: "trialing",
+      trialEndsAt,
+      createdAt: now,
+      createdBy: uid,
+      onboardingSource: "email_link_signup",
+    });
+    transaction.set(userRef, {
+      companyId: companyRef.id,
+      email,
+      displayName,
+      role: "admin",
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
+    return user;
   });
-  batch.set(userRef, {
-    companyId: companyRef.id,
-    email,
-    displayName,
-    role: "admin",
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  });
-  await batch.commit();
-
-  return user;
 }
 
 export async function provisionInvitedUser({
@@ -118,15 +119,9 @@ export async function provisionInvitedUser({
   role: "admin" | "employee";
   linkedEmployeeId: string | null;
 }): Promise<AppUser> {
+  await assertWorkspaceEmailAllowed(companyId, email);
   const db = adminDb();
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
-  const userSnapshot = await userRef.get();
-
-  if (userSnapshot.exists) {
-    const existing = { id: userSnapshot.id, ...appUserSchema.parse(userSnapshot.data()) };
-    if (existing.status === "active") return existing;
-  }
-
   const displayName = email.split("@")[0] || "Team member";
   const now = FieldValue.serverTimestamp();
   const userData: Record<string, unknown> = {
@@ -140,9 +135,21 @@ export async function provisionInvitedUser({
   };
   if (linkedEmployeeId) userData.linkedEmployeeId = linkedEmployeeId;
 
-  await userRef.set(userData);
-
-  return { id: uid, companyId, email, displayName, role, status: "active", linkedEmployeeId: linkedEmployeeId ?? undefined };
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(userRef);
+    if (snapshot.exists) {
+      const existing = { id: snapshot.id, ...appUserSchema.parse(snapshot.data()) };
+      if (existing.companyId !== companyId) throw new AuthorizationError("This account belongs to another workspace.");
+      if (existing.status !== "active") throw new AuthorizationError("This account is disabled.");
+      return existing;
+    }
+    if (linkedEmployeeId) {
+      const employee = await transaction.get(db.collection("employees").doc(linkedEmployeeId));
+      if (!employee.exists || employee.get("companyId") !== companyId) throw new AuthorizationError("Employee is not in your workspace.");
+    }
+    transaction.set(userRef, userData);
+    return { id: uid, companyId, email, displayName, role, status: "active" as const, linkedEmployeeId: linkedEmployeeId ?? undefined };
+  });
 }
 
 export async function listCompanyUsers(companyId: string): Promise<AppUser[]> {
@@ -213,6 +220,7 @@ export async function updateAccountSettings(
       companyRef,
       {
         name: input.companyName,
+        ...(input.allowedEmailDomains !== undefined ? { allowedEmailDomains: input.allowedEmailDomains } : {}),
         updatedAt: now,
       },
       { merge: true },

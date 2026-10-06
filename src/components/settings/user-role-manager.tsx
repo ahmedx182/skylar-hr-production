@@ -6,13 +6,13 @@ import {
   updateUserRoleAction,
   type UserRoleState,
 } from "@/features/auth/user-role-actions";
-import type { AppUser } from "@/types/auth";
+import type { TeamMember } from "@/features/auth/team-member";
 
 export function UserRoleManager({
   users,
   currentUid,
 }: {
-  users: AppUser[];
+  users: TeamMember[];
   currentUid: string;
 }) {
   return (
@@ -36,7 +36,7 @@ export function UserRoleManager({
   );
 }
 
-function UserRoleRow({ user, isSelf }: { user: AppUser; isSelf: boolean }) {
+function UserRoleRow({ user, isSelf }: { user: TeamMember; isSelf: boolean }) {
   const [state, setState] = useState<UserRoleState | null>(null);
   const [isPending, setIsPending] = useState(false);
 

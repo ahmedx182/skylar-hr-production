@@ -47,7 +47,8 @@ async function assertEmailCanSignIn(email: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Skylar could not check access for this email. Try again.");
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.error?.message || "Skylar could not check access for this email. Try again.");
   }
 
   const result = (await response.json()) as { allowed?: boolean };

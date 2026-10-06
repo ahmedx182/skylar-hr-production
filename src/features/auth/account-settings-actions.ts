@@ -19,8 +19,9 @@ export async function updateAccountSettingsAction(
 ): Promise<AccountSettingsState> {
   try {
     const session = await requireSession();
-    const parsed = accountSettingsSchema.parse(input);
-    await updateAccountSettings(session, parsed);
+    const parsed = accountSettingsSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid settings." };
+    await updateAccountSettings(session, parsed.data);
     revalidatePath(SETTINGS_PATH);
     return { ok: true, message: "Account settings saved." };
   } catch (error) {

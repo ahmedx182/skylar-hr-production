@@ -1,4 +1,5 @@
 export const LOGIN_PATH = "/login";
+export const SIGNUP_PATH = "/signup";
 export const VERIFY_PATH = "/verify";
 export const BRIEFING_PATH = "/briefing";
 export const ONBOARDING_PATH = "/onboarding";

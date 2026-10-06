@@ -13,7 +13,7 @@ import {
   findPendingInviteByEmail,
 } from "@/server/repositories/invite.repository";
 import { isFirebaseAuthError } from "./firebase-auth-error";
-import { assertSignupDomainAllowed } from "./signup-domain";
+import { assertWorkspaceEmailAllowed } from "./workspace-domain";
 
 /** Only a sign-in this recent may be exchanged, so a stolen older ID token is useless (Firebase guidance). */
 const MAX_SIGN_IN_AGE_SECONDS = 5 * 60;
@@ -51,9 +51,12 @@ export async function createSession(
   }
 
   const user = await findUserById(decoded.uid);
-  if (!user || user.status !== "active") {
+  if (user && user.status !== "active") {
+    throw new AuthenticationError("This account is disabled. Contact your workspace admin.");
+  }
+  if (user?.role === "employee") await assertWorkspaceEmailAllowed(user.companyId, email);
+  if (!user) {
     if (signup) {
-      assertSignupDomainAllowed(email);
       await provisionSignupWorkspace({ uid: decoded.uid, email, companyName: signup.companyName });
     } else {
       const invite = await findPendingInviteByEmail(email);

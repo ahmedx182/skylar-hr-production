@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   provisionInvitedUser: vi.fn(),
   findPendingInviteByEmail: vi.fn(),
   acceptInvite: vi.fn(),
+  assertWorkspaceEmailAllowed: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({ adminAuth: () => mocks }));
@@ -20,6 +21,8 @@ vi.mock("@/server/repositories/invite.repository", () => ({
   findPendingInviteByEmail: mocks.findPendingInviteByEmail,
   acceptInvite: mocks.acceptInvite,
 }));
+
+vi.mock("@/server/auth/workspace-domain", () => ({ assertWorkspaceEmailAllowed: mocks.assertWorkspaceEmailAllowed }));
 
 import { SESSION_MAX_AGE_MS } from "@/constants/auth";
 import { AuthenticationError } from "@/lib/errors";
@@ -36,7 +39,6 @@ describe("createSession", () => {
     vi.stubEnv("FIREBASE_PROJECT_ID", "demo-project");
     vi.stubEnv("FIREBASE_CLIENT_EMAIL", "svc@demo-project.iam.gserviceaccount.com");
     vi.stubEnv("FIREBASE_PRIVATE_KEY", "-----BEGIN KEY-----\\nabc\\n-----END KEY-----\\n");
-    vi.stubEnv("SIGNUP_ALLOWED_DOMAINS", "example.com");
     mocks.verifyIdToken.mockResolvedValue({
       uid: "u1",
       email: "admin@example.com",
@@ -162,5 +164,35 @@ describe("createSession", () => {
       email: "admin@example.com",
       companyName: "Example Company",
     });
+    expect(mocks.provisionSignupWorkspace.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.createSessionCookie.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not let a disabled user reactivate through owner signup", async () => {
+    mocks.findUserById.mockResolvedValue({ status: "disabled" });
+    await expect(createSession("id-token", { companyName: "Example" })).rejects.toThrow("disabled");
+    expect(mocks.provisionSignupWorkspace).not.toHaveBeenCalled();
+    expect(mocks.createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("keeps an existing member in their workspace when signup metadata is supplied", async () => {
+    await createSession("id-token", { companyName: "Other Workspace" });
+    expect(mocks.provisionSignupWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("allows owner signup from any verified email domain", async () => {
+    mocks.findUserById.mockResolvedValue(null);
+    mocks.verifyIdToken.mockResolvedValue({ uid: "u1", email: "owner@blocked.com", email_verified: true, auth_time: nowSeconds() });
+    await expect(createSession("id-token", { companyName: "Example" })).resolves.toHaveProperty("cookie");
+    expect(mocks.provisionSignupWorkspace).toHaveBeenCalled();
+  });
+
+  it("enforces the employee's workspace policy before minting a session", async () => {
+    mocks.findUserById.mockResolvedValue({ role: "employee", status: "active", companyId: "tenant-a" });
+    mocks.assertWorkspaceEmailAllowed.mockRejectedValue(new AuthenticationError("Domain denied"));
+    await expect(createSession("id-token")).rejects.toThrow("Domain denied");
+    expect(mocks.assertWorkspaceEmailAllowed).toHaveBeenCalledWith("tenant-a", "admin@example.com");
+    expect(mocks.createSessionCookie).not.toHaveBeenCalled();
   });
 });

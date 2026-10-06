@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EmailForm } from "@/components/auth/email-form";
 import { focusRing } from "@/components/ui/focus-ring";
-import { BRIEFING_PATH, LOGIN_PATH, ONBOARDING_PATH } from "@/constants/routes";
+import { BRIEFING_PATH, LOGIN_PATH, ONBOARDING_PATH, SIGNUP_PATH } from "@/constants/routes";
+import { signupSchema } from "@/schemas/auth.schema";
 import {
   clearMagicEmail,
   clearPendingSignup,
@@ -20,6 +21,7 @@ type Phase = "verifying" | "needs-email" | "failed";
 
 export function VerifyEmailLink() {
   const [phase, setPhase] = useState<Phase>("verifying");
+  const [failureMessage, setFailureMessage] = useState("This sign-in link is invalid, expired, or already used.");
   const started = useRef(false);
 
   const completeSignIn = useCallback(async (email: string) => {
@@ -27,7 +29,10 @@ export function VerifyEmailLink() {
       setPhase("verifying");
     try {
       const { user } = await signInWithEmailLink(auth, email, window.location.href);
-      const pendingSignup = readPendingSignup(email);
+      const companyName = new URL(window.location.href).searchParams.get("companyName");
+      const linkSignup = companyName === null ? null : signupSchema.safeParse({ email, companyName });
+      if (linkSignup && !linkSignup.success) throw new Error("Workspace details are invalid. Start signup again.");
+      const pendingSignup = linkSignup?.success ? linkSignup.data : readPendingSignup(email);
       await createServerSession(
         await user.getIdToken(),
         pendingSignup ? { companyName: pendingSignup.companyName } : undefined,
@@ -36,7 +41,8 @@ export function VerifyEmailLink() {
       clearPendingSignup();
       // Hard navigation: a soft one could reuse a router-cached, signed-out render.
       window.location.replace(pendingSignup ? ONBOARDING_PATH : BRIEFING_PATH);
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && !("code" in error)) setFailureMessage(error.message);
       setPhase("failed");
     } finally {
       // The server cookie is the session; leave no Firebase auth state in the browser.
@@ -75,9 +81,9 @@ export function VerifyEmailLink() {
   if (phase === "failed") {
     return (
       <>
-        <h1 className="text-2xl font-medium">Link not valid</h1>
+        <h1 className="text-2xl font-medium">Could not finish signing in</h1>
         <p role="alert" className="mt-2 text-paper-2">
-          This sign-in link is invalid, expired, or already used.
+          {failureMessage}
         </p>
         <Link
           href={LOGIN_PATH}
@@ -85,6 +91,7 @@ export function VerifyEmailLink() {
         >
           Request a new link
         </Link>
+        <Link href={SIGNUP_PATH} className={cn("ml-4 underline underline-offset-4", focusRing)}>Restart workspace signup</Link>
       </>
     );
   }

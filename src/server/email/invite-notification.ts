@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { LOGIN_PATH } from "@/constants/routes";
 import { getServerEnv } from "@/lib/env/server";
 
 type InviteEmailInput = {
@@ -18,7 +19,7 @@ function resend(apiKey: string): Resend {
 
 function buildInviteEmail(input: InviteEmailInput) {
   const roleLabel = input.role === "admin" ? "admin" : "team member";
-  const signInUrl = `${input.appUrl}/sign-in`;
+  const signInUrl = `${input.appUrl}${LOGIN_PATH}`;
 
   const subject = `You've been invited to ${input.companyName} on Skylar`;
 

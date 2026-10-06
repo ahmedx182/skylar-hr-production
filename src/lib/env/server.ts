@@ -18,17 +18,6 @@ const optionalNonEmptyString = z.preprocess(
   z.string().min(1).optional(),
 );
 
-const optionalDomainList = z.preprocess(
-  (value) =>
-    typeof value === "string"
-      ? value
-          .split(",")
-          .map((domain) => domain.trim().toLowerCase())
-          .filter(Boolean)
-      : [],
-  z.array(z.string()).default([]),
-);
-
 const optionalBoolean = z.preprocess(
   (value) => value === "true" || value === true,
   z.boolean().default(false),
@@ -50,7 +39,6 @@ const serverEnvSchema = z.object({
   AI_RATE_LIMIT_MAX_REQUESTS: optionalPositiveInt(20),
   AI_RATE_LIMIT_WINDOW_MS: optionalPositiveInt(60_000),
   AI_RESPONSE_CACHE_TTL_MS: optionalPositiveInt(300_000),
-  SIGNUP_ALLOWED_DOMAINS: optionalDomainList,
   DEMO_DISABLE_PAYMENT_GATE: optionalBoolean,
   STRIPE_SECRET_KEY: optionalNonEmptyString,
   STRIPE_WEBHOOK_SECRET: optionalNonEmptyString,
