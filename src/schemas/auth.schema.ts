@@ -44,4 +44,6 @@ export const appUserSchema = z.object({
   linkedEmployeeId: z.string().optional(),
   /** Firestore Timestamp written at provisioning; absent on very old records. */
   createdAt: z.custom<{ toDate(): Date }>((v) => typeof (v as { toDate?: unknown })?.toDate === "function").optional(),
+  /** Set when a platform admin deleted the account. It stays recoverable for 30 days. */
+  deletedAt: z.custom<{ toDate(): Date }>((v) => typeof (v as { toDate?: unknown })?.toDate === "function").optional(),
 });

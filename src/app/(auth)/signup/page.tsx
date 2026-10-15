@@ -20,7 +20,7 @@ export default async function SignupPage() {
           <p className="font-mono text-xs uppercase tracking-[0.16em] text-sun">For organization owners</p>
           <h1 className="mt-4 text-4xl font-semibold leading-tight">Create your workspace.</h1>
           <p className="mt-4 leading-7 text-paper-2">Verify your work email, become your workspace&apos;s first admin, then set up your people and invite your team.</p>
-          <p className="mt-3 text-sm text-paper-3">14-day free trial. No credit card required. Manage your team&apos;s allowed email domains in workspace settings.</p>
+          <p className="mt-3 text-sm text-paper-3">Free to start with 5 advisor messages. No credit card required. Manage your team&apos;s allowed email domains in workspace settings.</p>
           <SignupForm />
           <p className="mt-6 text-sm text-paper-2">Already have an account? <Link href={LOGIN_PATH} className="font-semibold text-sun underline underline-offset-4">Sign in</Link></p>
         </div>

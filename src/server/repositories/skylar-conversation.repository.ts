@@ -1,4 +1,5 @@
 import "server-only";
+import { isSoftDeleted, restoreFields } from "./soft-delete";
 import { createHash } from "node:crypto";
 import { FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import {
@@ -65,7 +66,7 @@ function conversationLedgerDescription(
 
 async function assertEmployeeBelongsToCompany(companyId: string, employeeId: string): Promise<void> {
   const employee = await adminDb().collection(EMPLOYEES_COLLECTION).doc(employeeId).get();
-  if (!employee.exists || employee.get("companyId") !== companyId) {
+  if (!employee.exists || employee.get("companyId") !== companyId || isSoftDeleted(employee)) {
     throw new NotFoundError("Employee not found.");
   }
 }
@@ -92,7 +93,7 @@ async function employeeLedgerSummary(
     .where("employeeId", "==", employeeId)
     .get();
   const items = snapshot.docs
-    .filter((doc) => doc.id !== omittedLedgerEntryId)
+    .filter((doc) => doc.id !== omittedLedgerEntryId && !isSoftDeleted(doc))
     .map(ledgerItemFromDoc);
 
   return buildEmployeeMemorySummary([...items, override]);
@@ -214,6 +215,8 @@ export async function appendSkylarConversationTurn(
         createdBy: session.uid,
         updatedAt: FieldValue.serverTimestamp(),
         updatedBy: session.uid,
+        // Chatting again in a deleted conversation brings its record back.
+        ...restoreFields(),
       },
       { merge: true },
     );

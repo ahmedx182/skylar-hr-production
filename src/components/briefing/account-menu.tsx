@@ -78,18 +78,13 @@ export function AccountMenu({ session }: { session: AuthSession }) {
         type="button"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((value) => !value)}
-        className="flex cursor-pointer list-none items-center gap-2 rounded-full px-1.5 py-1.5 text-left transition-colors hover:bg-paper/[0.06]"
+        className="flex cursor-pointer list-none items-center gap-2 rounded-full py-1 pl-1 pr-1 text-left transition-colors hover:bg-paper/[0.06] md:pr-3"
       >
-        <span className="grid size-9 place-items-center rounded-full bg-paper text-sm font-semibold text-ink">
+        <span className="grid size-8 place-items-center rounded-full bg-paper text-sm font-semibold text-ink">
           {initials(accountName)}
         </span>
-        <span className="hidden min-w-0 md:block">
-          <span className="block max-w-52 truncate text-sm font-semibold text-paper">
-            {accountName}
-          </span>
-          <span className="mt-0.5 block font-mono text-xs uppercase text-paper-3">
-            {session.role}
-          </span>
+        <span className="hidden max-w-52 truncate text-sm font-semibold text-paper md:block">
+          {accountName}
         </span>
       </button>
 

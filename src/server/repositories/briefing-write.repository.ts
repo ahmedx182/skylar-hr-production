@@ -1,4 +1,5 @@
 import "server-only";
+import { isSoftDeleted, restoreFields, softDeleteFields } from "./soft-delete";
 import { FieldValue, type QueryDocumentSnapshot, type Transaction } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { AuthorizationError, ConflictError, NotFoundError } from "@/lib/errors";
@@ -35,10 +36,10 @@ async function assertUniqueEmployeeEmail(
     .collection(EMPLOYEES_COLLECTION)
     .where("companyId", "==", companyId)
     .where("email", "==", email)
-    .limit(2)
     .get();
 
-  const duplicate = snapshot.docs.find((doc) => doc.id !== exceptEmployeeId);
+  // A deleted employee frees their email; restoring them re-checks it.
+  const duplicate = snapshot.docs.find((doc) => doc.id !== exceptEmployeeId && !isSoftDeleted(doc));
   if (duplicate) {
     throw new ConflictError("An employee with this work email already exists.");
   }
@@ -115,7 +116,7 @@ export async function createEmployeeRecord(
       companyId: session.companyId,
       email: input.email,
       displayName: input.name,
-      ...(!userSnapshot.exists ? { role: "employee", status: "active" } : {}),
+      ...(!userSnapshot.exists ? { role: "employee", status: "active", createdAt: now } : {}),
     }, { merge: true });
     return nextCode;
   });
@@ -138,7 +139,7 @@ async function upsertWorkspaceUser(session: AuthSession, email: string, displayN
     assertUserWorkspace(snapshot.exists ? snapshot.data() : undefined, session.companyId);
     transaction.set(userRef, {
       companyId: session.companyId, email, displayName,
-      ...(!snapshot.exists ? { role: "employee", status: "active" } : {}),
+      ...(!snapshot.exists ? { role: "employee", status: "active", createdAt: FieldValue.serverTimestamp() } : {}),
     }, { merge: true });
   });
 }
@@ -165,7 +166,7 @@ async function employeeLedgerSummary(
     .where("employeeId", "==", employeeId)
     .get();
   const items = snapshot.docs
-    .filter((doc) => doc.id !== omittedLedgerEntryId)
+    .filter((doc) => doc.id !== omittedLedgerEntryId && !isSoftDeleted(doc))
     .map(ledgerItemFromDoc);
 
   return buildEmployeeMemorySummary([...items, ...overrides]);
@@ -180,7 +181,7 @@ export async function updateEmployeeRecord(
   const ref = db.collection(EMPLOYEES_COLLECTION).doc(input.employeeId);
   const snapshot = await ref.get();
 
-  if (!snapshot.exists || snapshot.get("companyId") !== session.companyId) {
+  if (!snapshot.exists || snapshot.get("companyId") !== session.companyId || isSoftDeleted(snapshot)) {
     throw new NotFoundError("Employee not found.");
   }
   if (input.email) {
@@ -227,7 +228,7 @@ export async function createEmployeeNoteRecord(
   ]);
   const employeeSnapshot = await employeeRef.get();
 
-  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId) {
+  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId || isSoftDeleted(employeeSnapshot)) {
     throw new NotFoundError("Choose an employee before saving the note.");
   }
 
@@ -266,7 +267,7 @@ export async function updateEmployeeNoteRecord(
   const noteRef = db.collection(LEDGER_COLLECTION).doc(input.ledgerEntryId);
   const noteSnapshot = await noteRef.get();
 
-  if (!noteSnapshot.exists || noteSnapshot.get("companyId") !== session.companyId) {
+  if (!noteSnapshot.exists || noteSnapshot.get("companyId") !== session.companyId || isSoftDeleted(noteSnapshot)) {
     throw new NotFoundError("Note not found.");
   }
 
@@ -274,7 +275,7 @@ export async function updateEmployeeNoteRecord(
   const employeeRef = db.collection(EMPLOYEES_COLLECTION).doc(employeeId);
   const employeeSnapshot = await employeeRef.get();
 
-  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId) {
+  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId || isSoftDeleted(employeeSnapshot)) {
     throw new NotFoundError("Employee not found.");
   }
 
@@ -319,20 +320,21 @@ export async function deleteEmployeeNoteRecord(
   const noteRef = db.collection(LEDGER_COLLECTION).doc(ledgerEntryId);
   const noteSnapshot = await noteRef.get();
 
-  if (!noteSnapshot.exists || noteSnapshot.get("companyId") !== session.companyId) {
+  if (!noteSnapshot.exists || noteSnapshot.get("companyId") !== session.companyId || isSoftDeleted(noteSnapshot)) {
     throw new NotFoundError("Note not found.");
   }
 
   const employeeId = String(noteSnapshot.get("employeeId") ?? "");
   const employeeRef = db.collection(EMPLOYEES_COLLECTION).doc(employeeId);
   const employeeSnapshot = await employeeRef.get();
-  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId) {
+  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId || isSoftDeleted(employeeSnapshot)) {
     throw new NotFoundError("Employee not found.");
   }
 
+  // Soft delete: the note leaves every list now and is erased for good after the retention window.
   const summary = await employeeLedgerSummary(session.companyId, employeeId, [], ledgerEntryId);
   const batch = db.batch();
-  batch.delete(noteRef);
+  batch.update(noteRef, { ...softDeleteFields(session.uid), updatedAt: FieldValue.serverTimestamp() });
   batch.update(employeeRef, {
     summary: summary ? { text: summary, updatedAt: FieldValue.serverTimestamp() } : null,
     updatedAt: FieldValue.serverTimestamp(),
@@ -346,23 +348,63 @@ export async function deleteEmployeeRecord(
   session: AuthSession,
   employeeId: string,
 ): Promise<void> {
-  const db = adminDb();
-  const employeeRef = db.collection(EMPLOYEES_COLLECTION).doc(employeeId);
+  const employeeRef = adminDb().collection(EMPLOYEES_COLLECTION).doc(employeeId);
   const employeeSnapshot = await employeeRef.get();
 
-  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId) {
+  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId || isSoftDeleted(employeeSnapshot)) {
     throw new NotFoundError("Employee not found.");
   }
 
-  const ledger = await db
-    .collection(LEDGER_COLLECTION)
-    .where("companyId", "==", session.companyId)
-    .where("employeeId", "==", employeeId)
-    .get();
+  // Only the employee is marked. Their notes are hidden through it, so restoring the employee brings them back too.
+  await employeeRef.update({ ...softDeleteFields(session.uid), updatedAt: FieldValue.serverTimestamp() });
+}
+
+/** Brings a soft-deleted employee back, along with their notes. */
+export async function restoreEmployeeRecord(session: AuthSession, employeeId: string): Promise<void> {
+  const employeeRef = adminDb().collection(EMPLOYEES_COLLECTION).doc(employeeId);
+  const snapshot = await employeeRef.get();
+
+  if (!snapshot.exists || snapshot.get("companyId") !== session.companyId || !isSoftDeleted(snapshot)) {
+    throw new NotFoundError("That employee isn't in Recently deleted.");
+  }
+  const email = snapshot.get("email");
+  if (typeof email === "string" && email) {
+    // Someone may have been added with this email while the file was deleted.
+    await assertUniqueEmployeeEmail(session.companyId, email, employeeId);
+  }
+
+  await employeeRef.update({ ...restoreFields(), updatedAt: FieldValue.serverTimestamp() });
+}
+
+/** Brings a soft-deleted note back and rebuilds the employee's summary to include it. */
+export async function restoreNoteRecord(session: AuthSession, ledgerEntryId: string): Promise<{ employeeId: string }> {
+  const db = adminDb();
+  const noteRef = db.collection(LEDGER_COLLECTION).doc(ledgerEntryId);
+  const noteSnapshot = await noteRef.get();
+
+  if (!noteSnapshot.exists || noteSnapshot.get("companyId") !== session.companyId || !isSoftDeleted(noteSnapshot)) {
+    throw new NotFoundError("That note isn't in Recently deleted.");
+  }
+
+  const employeeId = String(noteSnapshot.get("employeeId") ?? "");
+  const employeeRef = db.collection(EMPLOYEES_COLLECTION).doc(employeeId);
+  const employeeSnapshot = await employeeRef.get();
+  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId) {
+    throw new NotFoundError("Employee not found.");
+  }
+  if (isSoftDeleted(employeeSnapshot)) {
+    throw new ConflictError(`Restore ${String(employeeSnapshot.get("name") ?? "this employee")} first, then restore the note.`);
+  }
+
+  // The note is still marked deleted while the summary is built, so it is passed in explicitly.
+  const summary = await employeeLedgerSummary(session.companyId, employeeId, [ledgerItemFromDoc(noteSnapshot as QueryDocumentSnapshot)]);
+  const now = FieldValue.serverTimestamp();
   const batch = db.batch();
-  batch.delete(employeeRef);
-  ledger.docs.forEach((doc) => batch.delete(doc.ref));
+  batch.update(noteRef, { ...restoreFields(), updatedAt: now });
+  batch.update(employeeRef, { summary: summary ? { text: summary, updatedAt: now } : null, updatedAt: now });
   await batch.commit();
+
+  return { employeeId };
 }
 
 function timestampMs(value: unknown): number {

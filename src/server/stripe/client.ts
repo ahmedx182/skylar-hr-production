@@ -15,12 +15,3 @@ export function stripe() {
 
   return stripeClient;
 }
-
-export function stripePriceId() {
-  const { STRIPE_PRICE_ID } = getServerEnv();
-  if (!STRIPE_PRICE_ID) {
-    throw new ExternalServiceError("Stripe price is not configured yet.");
-  }
-
-  return STRIPE_PRICE_ID;
-}

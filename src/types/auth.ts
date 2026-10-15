@@ -17,4 +17,10 @@ export interface AuthSession {
   role: Role;
   /** Firestore employee record id linked to this user account. Set for employee-role users. */
   linkedEmployeeId?: string | null;
+  /** Skylar staff with cross-workspace access (PLATFORM_ADMIN_EMAILS). Absent means false. */
+  isPlatformAdmin?: boolean;
+  /** Set when a platform admin has suspended or deleted this workspace. */
+  workspaceBlocked?: boolean;
+  /** When the workspace is soft-deleted: the time its data will be permanently removed. */
+  workspaceDeleteAfterMs?: number | null;
 }

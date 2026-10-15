@@ -1,12 +1,14 @@
 "use client";
 
-import { ChevronsUpDown, LoaderCircle, RefreshCcw, Send, UserRound, X } from "lucide-react";
+import { ArrowRight, ChevronsUpDown, LoaderCircle, RefreshCcw, Send, UserRound, X } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { AttachFileButton } from "@/components/briefing/attach-file-button";
 import { EscalationNoticeCard } from "@/components/briefing/escalation-notice-card";
 import type { EscalationEvent } from "@/features/briefing/chat-escalation";
 import { SkylarMessageText } from "@/components/briefing/skylar-message-text";
+import { BILLING_PATH } from "@/constants/routes";
 
 type SkylarContext = {
   employeeId?: string;
@@ -95,6 +97,7 @@ export function FloatingSkylarAction() {
   const [historyPage, setHistoryPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState("");
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastAutoPromptKeyRef = useRef<string | null>(null);
 
@@ -152,6 +155,7 @@ export function FloatingSkylarAction() {
 
     setDraft("");
     setError("");
+    setNeedsUpgrade(false);
     setIsLoading(true);
     setMessages((current) => [...current, { role: "user", text: submittedText }, { role: "assistant", text: "" }]);
 
@@ -163,6 +167,7 @@ export function FloatingSkylarAction() {
       });
 
       if (!result.ok || !result.body) {
+        if (result.status === 402) setNeedsUpgrade(true);
         const payload = (await result.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new Error(payload?.error?.message || "Skylar could not prepare this conversation.");
       }
@@ -557,7 +562,16 @@ export function FloatingSkylarAction() {
                 </div>
                 </Fragment>
               ))}
-              {error &&<p className="border-l-2 border-risk px-3 py-2 text-sm leading-6 text-risk">{error}</p>}
+              {error && <p className="border-l-2 border-risk px-3 py-2 text-sm leading-6 text-risk">{error}</p>}
+              {needsUpgrade && (
+                <Link
+                  href={BILLING_PATH}
+                  className="mt-2 inline-flex h-10 items-center gap-2 rounded-full bg-sun px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-90"
+                >
+                  Upgrade to keep chatting
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              )}
               <div ref={messagesEndRef} />
             </div>
           </div>

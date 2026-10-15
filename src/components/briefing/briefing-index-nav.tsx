@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Archive, CreditCard, FileText, Settings, ShieldAlert, UserRound, Workflow } from "lucide-react";
 import {
   ADVISOR_PATH,
@@ -9,8 +8,8 @@ import {
   PEOPLE_PATH,
   SETTINGS_PATH,
 } from "@/constants/routes";
+import { SidebarNavLink } from "@/components/briefing/sidebar-nav-link";
 import { formatBadgeCount } from "@/features/briefing/badge-count";
-import { cn } from "@/lib/utils/cn";
 import type { Role } from "@/types/auth";
 
 const indexItems = [
@@ -49,7 +48,7 @@ const indexItems = [
     label: "Billing",
     href: BILLING_PATH,
     icon: CreditCard,
-    description: "Trial & plan",
+    description: "Plan & billing",
     adminOnly: true,
   },
 ] as const;
@@ -107,60 +106,18 @@ export function BriefingIndexNav({
       : employeeItems(linkedEmployeeId);
 
   return (
-    <nav aria-label="Briefing index" className="grid gap-1 sm:grid-cols-4 lg:grid-cols-1">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const isActive = item.label === active;
-        const badge = item.label === "Advisor" ? formatBadgeCount(advisorOpenCount) : null;
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={isActive ? "page" : undefined}
-            className={cn(
-              "group grid grid-cols-[30px_minmax(0,1fr)] items-center gap-2.5 rounded-xl px-2 py-2.5 text-left transition-colors",
-              "hover:bg-paper/[0.06]",
-              isActive && "bg-paper text-ink shadow-[0_12px_30px_rgba(0,0,0,0.18)] hover:bg-paper",
-            )}
-          >
-            <span
-              className={cn(
-                "grid size-7 place-items-center rounded-lg text-paper-2",
-                isActive && "bg-ink text-paper",
-              )}
-            >
-              <Icon className="size-4" aria-hidden="true" />
-            </span>
-            <span className="min-w-0">
-              <span
-                className={cn(
-                  "flex items-center gap-2 text-sm font-semibold text-paper",
-                  isActive && "text-ink",
-                )}
-              >
-                <span className="truncate">{item.title}</span>
-                {badge && (
-                  <span
-                    aria-label={`${advisorOpenCount} open cases`}
-                    className="shrink-0 rounded-full bg-risk px-1.5 py-0.5 font-mono text-[10px] leading-none text-paper"
-                  >
-                    {badge}
-                  </span>
-                )}
-              </span>
-              <span
-                className={cn(
-                  "mt-0.5 block truncate text-[11px] text-paper-3",
-                  isActive && "text-ink/55",
-                )}
-              >
-                {item.description}
-              </span>
-            </span>
-          </Link>
-        );
-      })}
+    <nav aria-label="Briefing index" className="grid gap-0.5 sm:grid-cols-4 lg:grid-cols-1">
+      {items.map((item) => (
+        <SidebarNavLink
+          key={item.href}
+          href={item.href}
+          icon={item.icon}
+          label={item.title}
+          isActive={item.label === active}
+          badge={item.label === "Advisor" ? formatBadgeCount(advisorOpenCount) : null}
+          badgeLabel={`${advisorOpenCount} open cases`}
+        />
+      ))}
     </nav>
   );
 }

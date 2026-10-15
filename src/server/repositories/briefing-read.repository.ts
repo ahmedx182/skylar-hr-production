@@ -1,4 +1,5 @@
 import "server-only";
+import { isSoftDeleted } from "./soft-delete";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { NotFoundError } from "@/lib/errors";
@@ -111,7 +112,7 @@ export async function getCompanyEmployee(
   const doc = await adminDb().collection(EMPLOYEES_COLLECTION).doc(employeeId).get();
   const data = doc.data() as EmployeeData | undefined;
 
-  if (!doc.exists || !data || data.companyId !== companyId) {
+  if (!doc.exists || !data || data.companyId !== companyId || isSoftDeleted(doc)) {
     throw new NotFoundError("Employee not found.");
   }
 
@@ -125,6 +126,7 @@ export async function listCompanyEmployees(companyId: string): Promise<EmployeeR
     .get();
 
   return snapshot.docs
+    .filter((doc) => !isSoftDeleted(doc))
     .map(employeeFromDoc)
     .sort((a, b) => b.updatedAtMs - a.updatedAtMs);
 }
@@ -141,18 +143,26 @@ export async function listEmployeeLedger(
     .get();
 
   return ledgerSnapshot.docs
+    .filter((doc) => !isSoftDeleted(doc))
     .map((doc) => ledgerFromDoc(doc, employee.name))
     .sort((a, b) => b.dateMs - a.dateMs);
 }
 
 export async function listCompanyLedger(companyId: string): Promise<LedgerRecord[]> {
-  const [employees, ledgerSnapshot] = await Promise.all([
-    listCompanyEmployees(companyId),
+  const [employeeSnapshot, ledgerSnapshot] = await Promise.all([
+    adminDb().collection(EMPLOYEES_COLLECTION).where("companyId", "==", companyId).get(),
     adminDb().collection(LEDGER_COLLECTION).where("companyId", "==", companyId).get(),
   ]);
-  const employeeNames = new Map(employees.map((employee) => [employee.id, employee.name]));
+  const employeeNames = new Map<string, string>();
+  // Notes belong to their employee, so deleting someone hides their notes too until they're restored.
+  const deletedEmployeeIds = new Set<string>();
+  for (const doc of employeeSnapshot.docs) {
+    if (isSoftDeleted(doc)) deletedEmployeeIds.add(doc.id);
+    else employeeNames.set(doc.id, employeeFromDoc(doc).name);
+  }
 
   return ledgerSnapshot.docs
+    .filter((doc) => !isSoftDeleted(doc) && !deletedEmployeeIds.has(optionalString((doc.data() as LedgerData).employeeId) ?? ""))
     .map((doc) => {
       const employeeId = optionalString((doc.data() as LedgerData).employeeId) ?? "";
       return ledgerFromDoc(doc, employeeNames.get(employeeId) ?? null);
@@ -167,7 +177,7 @@ export async function getCompanyLedgerEntry(
   const doc = await adminDb().collection(LEDGER_COLLECTION).doc(ledgerEntryId).get();
   const data = doc.data() as LedgerData | undefined;
 
-  if (!doc.exists || !data || data.companyId !== companyId) {
+  if (!doc.exists || !data || data.companyId !== companyId || isSoftDeleted(doc)) {
     throw new NotFoundError("Note not found.");
   }
 
@@ -176,6 +186,9 @@ export async function getCompanyLedgerEntry(
 
   if (employeeId) {
     const employeeDoc = await adminDb().collection(EMPLOYEES_COLLECTION).doc(employeeId).get();
+    if (employeeDoc.exists && employeeDoc.get("companyId") === companyId && isSoftDeleted(employeeDoc)) {
+      throw new NotFoundError("Note not found.");
+    }
     if (employeeDoc.exists && employeeDoc.get("companyId") === companyId) {
       employeeName = optionalString(employeeDoc.get("name"));
     }

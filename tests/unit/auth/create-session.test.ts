@@ -8,11 +8,14 @@ const mocks = vi.hoisted(() => ({
   provisionInvitedUser: vi.fn(),
   findPendingInviteByEmail: vi.fn(),
   acceptInvite: vi.fn(),
+  findCompanySummaryById: vi.fn(),
+  isPlatformAdminEmail: vi.fn(),
   assertWorkspaceEmailAllowed: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({ adminAuth: () => mocks }));
 vi.mock("@/server/repositories/user.repository", () => ({
+  findCompanySummaryById: mocks.findCompanySummaryById,
   findUserById: mocks.findUserById,
   provisionSignupWorkspace: mocks.provisionSignupWorkspace,
   provisionInvitedUser: mocks.provisionInvitedUser,
@@ -22,6 +25,7 @@ vi.mock("@/server/repositories/invite.repository", () => ({
   acceptInvite: mocks.acceptInvite,
 }));
 
+vi.mock("@/server/auth/platform-admin-email", () => ({ isPlatformAdminEmail: mocks.isPlatformAdminEmail }));
 vi.mock("@/server/auth/workspace-domain", () => ({ assertWorkspaceEmailAllowed: mocks.assertWorkspaceEmailAllowed }));
 
 import { SESSION_MAX_AGE_MS } from "@/constants/auth";
@@ -48,6 +52,8 @@ describe("createSession", () => {
     mocks.createSessionCookie.mockResolvedValue("signed-cookie");
     mocks.findPendingInviteByEmail.mockResolvedValue(null);
     mocks.acceptInvite.mockResolvedValue(undefined);
+    mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "active" });
+    mocks.isPlatformAdminEmail.mockReturnValue(false);
     mocks.findUserById.mockResolvedValue({
       id: "u1",
       companyId: "company-1",
@@ -169,11 +175,25 @@ describe("createSession", () => {
     );
   });
 
-  it("does not let a disabled user reactivate through owner signup", async () => {
+  it("does not let a suspended user reactivate through owner signup", async () => {
     mocks.findUserById.mockResolvedValue({ status: "disabled" });
-    await expect(createSession("id-token", { companyName: "Example" })).rejects.toThrow("disabled");
+    await expect(createSession("id-token", { companyName: "Example" })).rejects.toMatchObject({
+      code: "account_suspended",
+      status: 403,
+    });
     expect(mocks.provisionSignupWorkspace).not.toHaveBeenCalled();
     expect(mocks.createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("tells a deleted account apart from a suspended one", async () => {
+    mocks.findUserById.mockResolvedValue({ status: "disabled", deletedAt: { toDate: () => new Date() } });
+    await expect(createSession("id-token")).rejects.toMatchObject({ code: "account_deleted", status: 403 });
+    expect(mocks.createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("treats a stray deleted marker as deleted even if the status still says active", async () => {
+    mocks.findUserById.mockResolvedValue({ status: "active", deletedAt: { toDate: () => new Date() } });
+    await expect(createSession("id-token")).rejects.toMatchObject({ code: "account_deleted" });
   });
 
   it("keeps an existing member in their workspace when signup metadata is supplied", async () => {
@@ -194,5 +214,28 @@ describe("createSession", () => {
     await expect(createSession("id-token")).rejects.toThrow("Domain denied");
     expect(mocks.assertWorkspaceEmailAllowed).toHaveBeenCalledWith("tenant-a", "admin@example.com");
     expect(mocks.createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("refuses sign-in for a suspended workspace", async () => {
+    mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "blocked" });
+
+    await expect(createSession("id-token")).rejects.toThrow(/suspended/);
+    expect(mocks.createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("lets a platform admin sign in even when their workspace is suspended", async () => {
+    mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "blocked" });
+    mocks.isPlatformAdminEmail.mockReturnValue(true);
+
+    await expect(createSession("id-token")).resolves.toMatchObject({ cookie: "signed-cookie" });
+  });
+
+  it("refuses an invite into a suspended workspace", async () => {
+    mocks.findUserById.mockResolvedValue(null);
+    mocks.findPendingInviteByEmail.mockResolvedValue({ id: "inv-1", companyId: "company-2", role: "employee" });
+    mocks.findCompanySummaryById.mockResolvedValue({ name: "Other", status: "blocked" });
+
+    await expect(createSession("id-token")).rejects.toThrow(/suspended/);
+    expect(mocks.provisionInvitedUser).not.toHaveBeenCalled();
   });
 });

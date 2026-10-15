@@ -3,10 +3,32 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, ArrowUpRight, CheckCircle2, FileText, ShieldAlert, Users, Zap } from "lucide-react";
 import { BRIEFING_PATH, LOGIN_PATH, PRIVACY_PATH, SIGNUP_PATH, TERMS_PATH } from "@/constants/routes";
+import { DEFAULT_PACKAGES, displayFeatures, formatPackagePrice, isFreePackage, type PricingPackage } from "@/features/pricing/package";
+import { listPublishedPackages } from "@/server/repositories/pricing.repository";
 import { getSession } from "@/server/auth/get-session";
+
+const FALLBACK_PACKAGES: PricingPackage[] = DEFAULT_PACKAGES.map((pkg) => ({
+  ...pkg,
+  archived: false,
+  stripeProductId: null,
+  stripePriceId: null,
+  createdAtMs: null,
+  updatedAtMs: null,
+}));
+
+/** The landing page must render even if the database is briefly unreachable. */
+async function loadPackages(): Promise<PricingPackage[]> {
+  try {
+    const packages = await listPublishedPackages();
+    return packages.length ? packages : FALLBACK_PACKAGES;
+  } catch {
+    return FALLBACK_PACKAGES;
+  }
+}
 
 export default async function MarketingPage() {
   if (await getSession()) redirect(BRIEFING_PATH);
+  const packages = await loadPackages();
 
   return (
     <div className="min-h-dvh bg-[#0d0b09] text-paper selection:bg-[#F2A93B]/20">
@@ -79,7 +101,7 @@ export default async function MarketingPage() {
                     href={SIGNUP_PATH}
                     className="group inline-flex h-11 items-center gap-2 rounded-full bg-paper px-7 text-sm font-semibold text-[#0d0b09] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_24px_rgba(244,239,231,0.14)] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_12px_36px_rgba(244,239,231,0.24)]"
                   >
-                    Start free — 14 days
+                    Start free
                     <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
                   </Link>
                   <Link
@@ -277,7 +299,7 @@ export default async function MarketingPage() {
                 </h2>
               </div>
               <Link href={SIGNUP_PATH} className="inline-flex items-center gap-1.5 text-sm text-paper/35 transition-colors duration-200 hover:text-paper">
-                Start free trial <ArrowRight className="size-3.5" aria-hidden="true" />
+                Start free <ArrowRight className="size-3.5" aria-hidden="true" />
               </Link>
             </div>
 
@@ -304,70 +326,91 @@ export default async function MarketingPage() {
         <section id="pricing" className="relative px-6 pb-32 pt-4 md:px-10 md:pb-40">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
 
-          <div className="mx-auto max-w-7xl">
-            <div className="grid gap-16 lg:grid-cols-2 lg:gap-28">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#F2A93B]/65">Pricing</p>
-                <h2 className="mt-5 text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-paper md:text-5xl">
-                  Start free.
-                  <br />
-                  Stay if it works.
-                </h2>
-                <p className="mt-5 text-[15.5px] leading-[1.8] text-paper/45">
-                  14-day free trial, full access. No credit card to start.
-                </p>
-
-                <div className="mt-9 space-y-2.5">
-                  {[
-                    "Unlimited employees",
-                    "Daily AI briefing deck",
-                    "Conversation memory per employee",
-                    "Advisor escalation routing",
-                    "Team seats included",
-                    "PDF document exports",
-                    "Passwordless sign-in",
-                  ].map((item) => (
-                    <div key={item} className="flex items-center gap-3 text-[13.5px] text-paper/55">
-                      <CheckCircle2 className="size-4 shrink-0 text-[#4CD07D]" aria-hidden="true" />
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="w-full max-w-[340px] rounded-3xl bg-white/[0.04] p-8 ring-1 ring-white/[0.09] transition-all duration-500 hover:bg-white/[0.06] hover:shadow-[0_16px_60px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.12)]">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-paper/35">Professional</p>
-                  <div className="mt-4 flex items-baseline gap-1.5">
-                    <span className="text-[3rem] font-semibold leading-none text-paper">$49</span>
-                    <span className="text-sm text-paper/35">/ mo</span>
-                  </div>
-                  <p className="mt-1 text-xs text-paper/25">per workspace · billed monthly</p>
-
-                  <Link
-                    href={SIGNUP_PATH}
-                    className="mt-7 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-paper text-sm font-semibold text-[#0d0b09] transition-opacity hover:opacity-90"
-                  >
-                    Start 14-day free trial
-                    <ArrowRight className="size-4" aria-hidden="true" />
-                  </Link>
-                  <p className="mt-2.5 text-center text-[11px] text-paper/25">No credit card required</p>
-
-                  <div className="mt-7 space-y-4 border-t border-white/[0.06] pt-6">
-                    {[
-                      { q: "Can I invite my team?", a: "Yes — admins invite from settings." },
-                      { q: "What happens after the trial?", a: "Add a card to continue. No auto-charge." },
-                      { q: "Is my data private?", a: "Each workspace is fully isolated." },
-                    ].map(({ q, a }) => (
-                      <div key={q}>
-                        <p className="text-[13px] font-semibold text-paper/65">{q}</p>
-                        <p className="mt-0.5 text-[12px] text-paper/30">{a}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+          <div className="mx-auto max-w-5xl">
+            <div className="max-w-xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#F2A93B]/65">Pricing</p>
+              <h2 className="mt-5 text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-paper md:text-5xl">
+                Start free.
+                <br />
+                Stay if it works.
+              </h2>
+              <p className="mt-5 text-[15.5px] leading-[1.8] text-paper/45">
+                Every workspace starts on Free. Upgrade when your team needs the advisor every day.
+              </p>
             </div>
+
+            <div
+              className={`mt-14 grid gap-5 ${
+                packages.length >= 3 ? "lg:grid-cols-3 md:grid-cols-2" : packages.length === 2 ? "md:grid-cols-2" : "max-w-md"
+              }`}
+            >
+              {packages.map((pkg) => {
+                const price = formatPackagePrice(pkg);
+                const isFree = isFreePackage(pkg);
+                return (
+                  <div
+                    key={pkg.id}
+                    className={
+                      pkg.highlighted
+                        ? "relative flex flex-col rounded-3xl bg-[#F2A93B]/[0.06] p-8 ring-1 ring-[#F2A93B]/30 shadow-[0_24px_80px_rgba(242,169,59,0.08)]"
+                        : "flex flex-col rounded-3xl bg-white/[0.03] p-8 ring-1 ring-white/[0.08]"
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={pkg.highlighted ? "text-sm font-semibold text-paper" : "text-sm font-semibold text-paper/70"}>{pkg.name}</p>
+                      {pkg.badge && (
+                        <span className="rounded-full bg-[#F2A93B]/15 px-2.5 py-1 text-[11px] font-semibold text-[#F2A93B]">{pkg.badge}</span>
+                      )}
+                    </div>
+                    <div className="mt-4 flex items-baseline gap-1.5">
+                      <span className="text-[3rem] font-semibold leading-none text-paper">{price.amount}</span>
+                      <span className="text-sm text-paper/40">{price.period}</span>
+                    </div>
+                    {pkg.description && <p className="mt-2 text-[13.5px] leading-6 text-paper/45">{pkg.description}</p>}
+
+                    <ul className="mt-7 flex-1 space-y-3">
+                      {displayFeatures(pkg).map((item) => (
+                        <li key={item} className="flex items-start gap-3 text-[13.5px] leading-5 text-paper/65">
+                          <CheckCircle2
+                            className={pkg.highlighted ? "mt-px size-4 shrink-0 text-[#F2A93B]" : "mt-px size-4 shrink-0 text-paper/35"}
+                            aria-hidden="true"
+                          />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Link
+                      href={SIGNUP_PATH}
+                      className={
+                        pkg.highlighted
+                          ? "mt-8 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-paper text-sm font-semibold text-[#0d0b09] transition-opacity hover:opacity-90"
+                          : "mt-8 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white/[0.07] text-sm font-semibold text-paper ring-1 ring-white/[0.1] transition-colors hover:bg-white/[0.12]"
+                      }
+                    >
+                      {isFree ? "Start free" : `Start with ${pkg.name}`}
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </Link>
+                    <p className="mt-2.5 text-center text-[11px] text-paper/30">
+                      {isFree ? "No credit card required" : "Start free, upgrade in one click from Billing"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <dl className="mt-14 grid gap-8 border-t border-white/[0.06] pt-10 md:grid-cols-3">
+              {[
+                { q: "Can I invite my team?", a: "Yes. Admins invite teammates from Settings, on any plan." },
+                { q: "What happens after the free messages?", a: "Everything else keeps working. Upgrade to keep chatting with the advisor. You are never charged unless you upgrade." },
+                { q: "Is my data private?", a: "Each workspace is fully isolated. Payments are handled by Stripe; we never see your card." },
+              ].map(({ q, a }) => (
+                <div key={q}>
+                  <dt className="text-[13.5px] font-semibold text-paper/75">{q}</dt>
+                  <dd className="mt-1.5 text-[13px] leading-6 text-paper/40">{a}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </section>
 
@@ -393,7 +436,7 @@ export default async function MarketingPage() {
                   href={SIGNUP_PATH}
                   className="mt-9 inline-flex h-11 items-center gap-2 rounded-full bg-paper px-10 text-sm font-semibold text-[#0d0b09] shadow-[0_4px_24px_rgba(244,239,231,0.18)] transition-all hover:opacity-90"
                 >
-                  Start free — 14 days
+                  Start free
                   <ArrowRight className="size-4" aria-hidden="true" />
                 </Link>
                 <p className="mt-3 text-xs text-paper/25">No credit card required</p>

@@ -15,6 +15,7 @@ import { employeePriority } from "@/features/briefing/employee-priority";
 import { ledgerStatusLabel } from "@/features/briefing/status-label";
 import { NotFoundError } from "@/lib/errors";
 import { requirePageSession } from "@/server/auth/require-session";
+import { getLayoutPreferences } from "@/server/preferences/layout-preferences";
 import { listCompanyAdvisorEscalations } from "@/server/repositories/advisor-escalation.repository";
 import {
   getCompanyEmployee,
@@ -170,6 +171,7 @@ export default async function EmployeeProfilePage({
               employeeName={employee.name}
               ledger={visibleLedger}
               canChat={canEdit}
+              initialDensity={getLayoutPreferences().listDensity}
             />
           </div>
         </div>

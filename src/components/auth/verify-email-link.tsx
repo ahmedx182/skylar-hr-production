@@ -13,6 +13,7 @@ import {
   readMagicEmail,
   readPendingSignup,
 } from "@/features/auth/magic-email";
+import { AccountBlockedClientError } from "@/features/auth/account-block";
 import { createServerSession } from "@/features/auth/session-client";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { cn } from "@/lib/utils/cn";
@@ -42,6 +43,10 @@ export function VerifyEmailLink() {
       // Hard navigation: a soft one could reuse a router-cached, signed-out render.
       window.location.replace(pendingSignup ? ONBOARDING_PATH : BRIEFING_PATH);
     } catch (error) {
+      if (error instanceof AccountBlockedClientError) {
+        window.location.replace(error.path);
+        return;
+      }
       if (error instanceof Error && !("code" in error)) setFailureMessage(error.message);
       setPhase("failed");
     } finally {

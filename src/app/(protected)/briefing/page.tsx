@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { parseBillingReturn } from "@/components/billing/billing-return-notice";
 import { BriefingShell } from "@/components/briefing/briefing-shell";
 import { buildDailyBriefingDeck } from "@/features/briefing/daily-deck";
 import { ONBOARDING_PATH } from "@/constants/routes";
 import { requirePageSession } from "@/server/auth/require-session";
+import { getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
 import { listHiddenBriefingCardIds } from "@/server/repositories/briefing-action.repository";
 import {
   listCompanyEmployees,
@@ -12,7 +14,11 @@ import {
 
 export const metadata: Metadata = { title: "Briefing" };
 
-export default async function BriefingPage() {
+export default async function BriefingPage({
+  searchParams,
+}: {
+  searchParams: { billing?: string | string[] };
+}) {
   const session = await requirePageSession();
   if (session.role !== "admin") redirect(session.linkedEmployeeId ? `/people/${session.linkedEmployeeId}` : "/settings");
   const [employees, ledger, hiddenCardIds] = await Promise.all([
@@ -26,5 +32,17 @@ export default async function BriefingPage() {
     redirect(ONBOARDING_PATH);
   }
 
-  return <BriefingShell session={session} cards={cards} hasHiddenCards={hiddenCardIds.size > 0} />;
+  const billingReturn = parseBillingReturn(searchParams.billing);
+  const billingNotice = billingReturn
+    ? { result: billingReturn, isPaid: (await getOrCreateCompanyBillingState(session)).plan === "paid" }
+    : null;
+
+  return (
+    <BriefingShell
+      session={session}
+      cards={cards}
+      hasHiddenCards={hiddenCardIds.size > 0}
+      billingNotice={billingNotice}
+    />
+  );
 }

@@ -3,9 +3,12 @@
 import { FileText, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { ListDensityToggle } from "@/components/briefing/list-density-toggle";
 import { NoteAdvisorChatButton } from "@/components/briefing/note-advisor-chat-button";
 import { conversationLedgerSummary } from "@/features/briefing/ledger-display";
 import { ledgerStatusLabel } from "@/features/briefing/status-label";
+import type { ListDensity } from "@/features/preferences/layout-preferences";
+import { cn } from "@/lib/utils/cn";
 
 type HistoryLedgerRecord = {
   id: string;
@@ -32,12 +35,15 @@ export function EmployeeHistoryList({
   employeeName,
   ledger,
   canChat,
+  initialDensity,
 }: {
   employeeId: string;
   employeeName: string;
   ledger: HistoryLedgerRecord[];
   canChat: boolean;
+  initialDensity: ListDensity;
 }) {
+  const [density, setDensity] = useState(initialDensity);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const filteredLedger = useMemo(() => {
@@ -92,6 +98,7 @@ export function EmployeeHistoryList({
         </label>
 
         <div className="flex flex-wrap items-center gap-1.5">
+          <ListDensityToggle value={density} onChange={setDensity} />
           {historyFilters.map((item) => {
             const isActive = filter === item.value;
             return (
@@ -128,7 +135,73 @@ export function EmployeeHistoryList({
       </div>
 
       {filteredLedger.length ? (
-        filteredLedger.map((note) => (
+        <div
+          className={cn(
+            "grid",
+            density === "compact" ? "gap-1.5" : "gap-3",
+            density === "grid" && "sm:grid-cols-2 2xl:grid-cols-3",
+          )}
+        >
+        {filteredLedger.map((note) => {
+          const href = `/documents/${note.id}?from=employee&employeeId=${employeeId}`;
+          const status = (
+            <span className={`w-fit shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${statusBadgeClass(note.statusDot)}`}>
+              {ledgerStatusLabel(note.statusDot, note.isEscalated)}
+            </span>
+          );
+          const chat = canChat && (
+            <NoteAdvisorChatButton employeeId={employeeId} employeeName={employeeName} note={note.description} />
+          );
+          const headline =
+            note.type === "conversation" ? conversationLedgerSummary(note.description).title : note.description;
+
+          if (density === "compact") {
+            return (
+              <div
+                key={note.id}
+                className="grid gap-2 rounded-xl border border-paper/10 bg-paper/[0.045] px-3 py-2 transition-colors hover:bg-paper/[0.075] md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+              >
+                <Link href={href} className="flex min-w-0 items-center gap-3">
+                  <span className="shrink-0 rounded-full bg-paper px-2 py-0.5 font-mono text-[10px] uppercase text-ink">
+                    {note.type}
+                  </span>
+                  <span className="hidden shrink-0 font-mono text-[11px] uppercase text-paper-3 sm:inline">
+                    {formatLedgerDate(note.dateMs)}
+                  </span>
+                  <span className="min-w-0 truncate text-sm text-paper-2">{headline}</span>
+                </Link>
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                  {status}
+                  {chat}
+                </div>
+              </div>
+            );
+          }
+
+          if (density === "grid") {
+            return (
+              <div
+                key={note.id}
+                className="flex flex-col justify-between gap-4 rounded-2xl border border-paper/10 bg-paper/[0.045] p-4 transition-colors hover:bg-paper/[0.075]"
+              >
+                <Link href={href} className="grid min-w-0 gap-3">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="w-fit rounded-full bg-paper px-3 py-1 font-mono text-xs uppercase text-ink">
+                      {note.type}
+                    </span>
+                    <span className="font-mono text-xs uppercase text-paper-3">{formatLedgerDate(note.dateMs)}</span>
+                  </span>
+                  <span className="line-clamp-4 text-sm leading-6 text-paper-2">{headline}</span>
+                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  {status}
+                  {chat}
+                </div>
+              </div>
+            );
+          }
+
+          return (
           <div
             key={note.id}
             className="grid gap-4 rounded-2xl border border-paper/10 bg-paper/[0.045] px-4 py-4 transition-colors hover:bg-paper/[0.075] md:grid-cols-[150px_minmax(0,1fr)_auto] md:items-start"
@@ -152,12 +225,12 @@ export function EmployeeHistoryList({
               <span className={`w-fit rounded-full px-3 py-1 text-sm font-semibold ${statusBadgeClass(note.statusDot)}`}>
                 {ledgerStatusLabel(note.statusDot, note.isEscalated)}
               </span>
-              {canChat && (
-                <NoteAdvisorChatButton employeeId={employeeId} employeeName={employeeName} note={note.description} />
-              )}
+              {chat}
             </div>
           </div>
-        ))
+          );
+        })}
+        </div>
       ) : (
         <div className="rounded-xl bg-paper/[0.06] px-4 py-8 text-center">
           <p className="font-semibold text-paper">No history matches those filters.</p>

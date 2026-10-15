@@ -54,7 +54,7 @@ export function DeleteEmployeeButton({ employeeId, employeeName }: { employeeId:
                   Delete {employeeName}&apos;s file?
                 </p>
                 <p className="mt-2 text-sm leading-6 text-ink/60">
-                  This removes the employee profile and every saved note attached to it. This cannot be undone.
+                  The profile and all its notes move to Recently deleted. You can restore them for 30 days, then they are permanently removed.
                 </p>
               </div>
             </div>

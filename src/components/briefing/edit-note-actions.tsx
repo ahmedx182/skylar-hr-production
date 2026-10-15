@@ -100,7 +100,7 @@ export function EditNoteActions({
           <div role="alertdialog" aria-modal="true" aria-labelledby="delete-note-title" className="w-full max-w-sm rounded-2xl bg-paper px-5 py-5 text-ink shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
             <p id="delete-note-title" className="text-lg font-semibold">Delete this note?</p>
             <p className="mt-2 text-sm leading-6 text-ink/60">
-              This removes the saved ledger entry from the employee history. This cannot be undone.
+              The note moves to Recently deleted. You can restore it for 30 days, then it is permanently removed.
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button

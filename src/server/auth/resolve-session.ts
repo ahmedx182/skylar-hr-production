@@ -1,9 +1,10 @@
 import "server-only";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { adminAuth } from "@/lib/firebase/admin";
-import { findCompanyNameById, findEmployeeIdByEmail, findUserById } from "@/server/repositories/user.repository";
+import { findCompanySummaryById, findEmployeeIdByEmail, findUserById } from "@/server/repositories/user.repository";
 import type { AuthSession } from "@/types/auth";
 import { isFirebaseAuthError } from "./firebase-auth-error";
+import { isPlatformAdminEmail } from "./platform-admin-email";
 import { assertWorkspaceEmailAllowed } from "./workspace-domain";
 import { AuthorizationError } from "@/lib/errors";
 
@@ -33,7 +34,7 @@ export async function resolveSession(cookie: string | undefined): Promise<AuthSe
       throw error;
     }
   }
-  const companyName = await findCompanyNameById(user.companyId);
+  const company = await findCompanySummaryById(user.companyId);
   // Employees created before account linking existed: match their file by work email.
   const linkedEmployeeId =
     user.linkedEmployeeId ??
@@ -44,8 +45,11 @@ export async function resolveSession(cookie: string | undefined): Promise<AuthSe
     email: claims.email ?? null,
     displayName: user.displayName,
     companyId: user.companyId,
-    companyName,
+    companyName: company?.name ?? null,
     role: user.role,
     linkedEmployeeId,
+    isPlatformAdmin: isPlatformAdminEmail(claims.email, claims.email_verified === true),
+    workspaceBlocked: Boolean(company) && company!.status !== "active",
+    workspaceDeleteAfterMs: company?.status === "deleted" ? company.deleteAfterMs : null,
   };
 }

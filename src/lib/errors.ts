@@ -10,6 +10,17 @@ export class AppError extends Error {
   }
 }
 
+/** The account exists but may not sign in. The code tells the browser which explanation page to show. */
+export class AccountBlockedError extends AppError {
+  constructor(readonly state: "suspended" | "deleted") {
+    super(
+      state === "deleted" ? "account_deleted" : "account_suspended",
+      403,
+      state === "deleted" ? "This account has been deleted." : "This account has been suspended.",
+    );
+  }
+}
+
 export class AuthenticationError extends AppError {
   constructor(message = "Authentication required.", options?: ErrorOptions) {
     super("unauthenticated", 401, message, options);
@@ -31,6 +42,12 @@ export class ValidationError extends AppError {
 export class NotFoundError extends AppError {
   constructor(message = "Not found.", options?: ErrorOptions) {
     super("not_found", 404, message, options);
+  }
+}
+
+export class PaymentRequiredError extends AppError {
+  constructor(message = "Upgrade to continue.", options?: ErrorOptions) {
+    super("payment_required", 402, message, options);
   }
 }
 

@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   verifySessionCookie: vi.fn(),
   findUserById: vi.fn(),
-  findCompanyNameById: vi.fn(),
+  findCompanySummaryById: vi.fn(),
   findEmployeeIdByEmail: vi.fn(),
+  isPlatformAdminEmail: vi.fn(),
   assertWorkspaceEmailAllowed: vi.fn(),
 }));
 
@@ -13,10 +14,11 @@ vi.mock("@/lib/firebase/admin", () => ({
 }));
 vi.mock("@/server/repositories/user.repository", () => ({
   findUserById: mocks.findUserById,
-  findCompanyNameById: mocks.findCompanyNameById,
+  findCompanySummaryById: mocks.findCompanySummaryById,
   findEmployeeIdByEmail: mocks.findEmployeeIdByEmail,
 }));
 
+vi.mock("@/server/auth/platform-admin-email", () => ({ isPlatformAdminEmail: mocks.isPlatformAdminEmail }));
 vi.mock("@/server/auth/workspace-domain", () => ({ assertWorkspaceEmailAllowed: mocks.assertWorkspaceEmailAllowed }));
 
 import { resolveSession } from "@/server/auth/resolve-session";
@@ -38,7 +40,8 @@ describe("resolveSession", () => {
     vi.resetAllMocks();
     mocks.verifySessionCookie.mockResolvedValue({ uid: "u1", email: "m@acme.com" });
     mocks.findUserById.mockResolvedValue(activeUser);
-    mocks.findCompanyNameById.mockResolvedValue("Acme");
+    mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "active", deleteAfterMs: null });
+    mocks.isPlatformAdminEmail.mockReturnValue(false);
   });
 
   it("returns null without a cookie and never calls Firebase", async () => {
@@ -60,7 +63,25 @@ describe("resolveSession", () => {
       companyName: "Acme",
       role: "manager",
       linkedEmployeeId: null,
+      isPlatformAdmin: false,
+      workspaceBlocked: false,
+      workspaceDeleteAfterMs: null,
     });
+  });
+
+  it("flags a suspended workspace and a platform admin from server-side records", async () => {
+    mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "blocked" });
+    mocks.isPlatformAdminEmail.mockReturnValue(true);
+    mocks.verifySessionCookie.mockResolvedValue({ uid: "u1", email: "m@acme.com", email_verified: true });
+
+    expect(await resolveSession("cookie")).toMatchObject({ workspaceBlocked: true, isPlatformAdmin: true });
+    expect(mocks.isPlatformAdminEmail).toHaveBeenCalledWith("m@acme.com", true);
+  });
+
+  it("flags a soft-deleted workspace as locked and reports when it will be purged", async () => {
+    mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "deleted", deleteAfterMs: 1_700_000_000_000 });
+
+    expect(await resolveSession("cookie")).toMatchObject({ workspaceBlocked: true, workspaceDeleteAfterMs: 1_700_000_000_000 });
   });
 
   it("links an unlinked employee to the employee file with the same work email", async () => {

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { BRIEFING_PATH, DOCUMENTS_PATH, PEOPLE_PATH } from "@/constants/routes";
+import { BRIEFING_PATH, DOCUMENTS_PATH, PEOPLE_PATH, RECENTLY_DELETED_PATH } from "@/constants/routes";
 import { AuthorizationError, toErrorResponse } from "@/lib/errors";
 import {
   createEmployeeSchema,
@@ -21,6 +21,8 @@ import {
   createEmployeeRecord,
   deleteEmployeeNoteRecord,
   deleteEmployeeRecord,
+  restoreEmployeeRecord,
+  restoreNoteRecord,
   updateEmployeeNoteRecord,
   updateEmployeeRecord,
 } from "@/server/repositories/briefing-write.repository";
@@ -121,7 +123,8 @@ export async function deleteNoteAction(ledgerEntryId: string): Promise<CreateAct
     revalidatePath(PEOPLE_PATH);
     revalidatePath(`${PEOPLE_PATH}/${result.employeeId}`);
     revalidatePath(BRIEFING_PATH);
-    return { ok: true, message: "Note deleted." };
+    revalidatePath(RECENTLY_DELETED_PATH);
+    return { ok: true, message: "Note moved to Recently deleted." };
   } catch (error) {
     return actionError(error);
   }
@@ -135,7 +138,39 @@ export async function deleteEmployeeAction(employeeId: string): Promise<CreateAc
     revalidatePath(PEOPLE_PATH);
     revalidatePath(DOCUMENTS_PATH);
     revalidatePath(BRIEFING_PATH);
-    return { ok: true, message: "Employee file deleted." };
+    revalidatePath(RECENTLY_DELETED_PATH);
+    return { ok: true, message: "Employee file moved to Recently deleted." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function restoreEmployeeAction(employeeId: string): Promise<CreateActionState> {
+  try {
+    const session = await requireAdmin();
+    const parsed = recordIdSchema.parse({ id: employeeId });
+    await restoreEmployeeRecord(session, parsed.id);
+    revalidatePath(PEOPLE_PATH);
+    revalidatePath(DOCUMENTS_PATH);
+    revalidatePath(BRIEFING_PATH);
+    revalidatePath(RECENTLY_DELETED_PATH);
+    return { ok: true, message: "Employee file restored." };
+  } catch (error) {
+    return actionError(error);
+  }
+}
+
+export async function restoreNoteAction(ledgerEntryId: string): Promise<CreateActionState> {
+  try {
+    const session = await requireAdmin();
+    const parsed = recordIdSchema.parse({ id: ledgerEntryId });
+    const result = await restoreNoteRecord(session, parsed.id);
+    revalidatePath(DOCUMENTS_PATH);
+    revalidatePath(PEOPLE_PATH);
+    revalidatePath(`${PEOPLE_PATH}/${result.employeeId}`);
+    revalidatePath(BRIEFING_PATH);
+    revalidatePath(RECENTLY_DELETED_PATH);
+    return { ok: true, message: "Note restored." };
   } catch (error) {
     return actionError(error);
   }

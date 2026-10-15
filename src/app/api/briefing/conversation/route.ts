@@ -13,6 +13,10 @@ import { streamSkylarConversation } from "@/server/ai/skylar-conversation";
 import { requireSession } from "@/server/auth/require-session";
 import { parseJsonBody } from "@/server/http/parse-json-body";
 import {
+  releaseAdvisorMessage,
+  reserveAdvisorMessage,
+} from "@/server/repositories/billing.repository";
+import {
   appendSkylarConversationTurn,
   listSkylarConversationMessages,
   listSkylarConversationPage,
@@ -61,6 +65,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let refund: (() => Promise<void>) | null = null;
   try {
     const session = await requireSession();
     const env = getServerEnv();
@@ -71,6 +76,9 @@ export async function POST(request: NextRequest) {
       maxRequests: env.AI_RATE_LIMIT_MAX_REQUESTS,
       windowMs: env.AI_RATE_LIMIT_WINDOW_MS,
     });
+    // Free workspaces get FREE_MESSAGE_LIMIT advisor messages; throws a 402 once they're used up.
+    const allowance = env.DEMO_DISABLE_PAYMENT_GATE ? { reserved: false } : await reserveAdvisorMessage(session);
+    if (allowance.reserved) refund = () => releaseAdvisorMessage(session);
     const isEmployee = session.role === "employee";
     const history = isEmployee ? [] : await listSkylarConversationMessages(session, input);
     // Employees only send a prompt; their name comes from the session, never from the client.
@@ -84,6 +92,8 @@ export async function POST(request: NextRequest) {
     const stream = await streamSkylarConversation(env, { ...chatInput, history, callerRole: session.role, escalationNotice }).catch((error: unknown) => {
       throw conversationError(error);
     });
+    // The reply is on its way, so the message now counts.
+    refund = null;
 
     const encoder = new TextEncoder();
     const body = new ReadableStream({
@@ -117,6 +127,8 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    // The message never got an answer, so don't charge it against the free allowance.
+    await refund?.().catch((refundError: unknown) => console.error("Could not refund free message", refundError));
     const response = toErrorResponse(conversationError(error));
     return Response.json(response.body, { status: response.status });
   }

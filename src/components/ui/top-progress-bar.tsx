@@ -105,12 +105,12 @@ export function TopProgressBar() {
   return (
     <div
       aria-hidden={!isVisible}
-      className="pointer-events-none fixed left-0 top-0 z-[100] h-1 w-full overflow-hidden bg-transparent"
+      className="pointer-events-none fixed left-0 top-0 z-[100] h-0.5 w-full overflow-hidden bg-transparent"
     >
       <div
         className={
           isVisible
-            ? "h-full bg-sun shadow-[0_0_24px_rgba(245,173,68,0.65)] transition-[width,opacity] duration-300 ease-out"
+            ? "h-full bg-sun shadow-[0_0_8px_rgba(245,173,68,0.5)] transition-[width,opacity] duration-300 ease-out"
             : "h-full bg-sun opacity-0 transition-opacity duration-200"
         }
         style={{ width: `${progress}%` }}
@@ -124,9 +124,9 @@ export function TopProgressFallback() {
     <div
       aria-label="Loading"
       role="progressbar"
-      className="fixed left-0 top-0 z-[100] h-1 w-full overflow-hidden bg-paper/10"
+      className="fixed left-0 top-0 z-[100] h-0.5 w-full overflow-hidden bg-paper/10"
     >
-      <div className="h-full w-1/2 animate-[skylar-progress-slide_1.05s_ease-in-out_infinite] bg-sun shadow-[0_0_24px_rgba(245,173,68,0.65)]" />
+      <div className="h-full w-1/2 animate-[skylar-progress-slide_1.05s_ease-in-out_infinite] bg-sun shadow-[0_0_8px_rgba(245,173,68,0.5)]" />
     </div>
   );
 }

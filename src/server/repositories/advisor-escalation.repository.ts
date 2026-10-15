@@ -1,4 +1,5 @@
 import "server-only";
+import { isSoftDeleted } from "./soft-delete";
 import { FieldValue, type DocumentData } from "firebase-admin/firestore";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { classifyLedgerRisk } from "@/features/briefing/risk-classification";
@@ -82,6 +83,7 @@ async function listRelatedLedger(
     .get();
 
   return snapshot.docs
+    .filter((doc) => !isSoftDeleted(doc))
     .map((doc) => {
       const data = doc.data();
       return {
@@ -116,7 +118,7 @@ export async function createAdvisorEscalationFromLedger(
   const ledgerSnapshot = await ledgerRef.get();
   const ledgerData = ledgerSnapshot.data();
 
-  if (!ledgerSnapshot.exists || !ledgerData || ledgerData.companyId !== session.companyId) {
+  if (!ledgerSnapshot.exists || !ledgerData || ledgerData.companyId !== session.companyId || isSoftDeleted(ledgerSnapshot)) {
     throw new NotFoundError("Note not found.");
   }
 
@@ -125,7 +127,7 @@ export async function createAdvisorEscalationFromLedger(
   const employeeSnapshot = await employeeRef.get();
   const employeeData = employeeSnapshot.data();
 
-  if (!employeeSnapshot.exists || !employeeData || employeeData.companyId !== session.companyId) {
+  if (!employeeSnapshot.exists || !employeeData || employeeData.companyId !== session.companyId || isSoftDeleted(employeeSnapshot)) {
     throw new NotFoundError("Employee not found.");
   }
 

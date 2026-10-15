@@ -46,6 +46,12 @@ const serverEnvSchema = z.object({
   RESEND_API_KEY: optionalNonEmptyString,
   SKYLAR_TEAM_EMAIL: optionalNonEmptyString,
   RESEND_FROM_EMAIL: optionalNonEmptyString,
+  // Comma-separated verified emails with cross-workspace platform access.
+  PLATFORM_ADMIN_EMAILS: optionalNonEmptyString,
+  // Shown to suspended or deleted users as the address to contact.
+  SUPPORT_EMAIL: optionalNonEmptyString,
+  // Shared secret for the scheduled job that permanently removes workspaces, employee files and notes 30 days after deletion.
+  CRON_SECRET: optionalNonEmptyString,
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -2,6 +2,18 @@
 
 import type { BriefingCard } from "@/features/briefing/types";
 
+function promptForCard(card: BriefingCard) {
+  const focus = card.title.replace(/[.!?]+$/, "");
+  const who = card.subject ?? "this employee";
+  if (card.tone === "risk") {
+    return `${focus}. This is escalated, so what should I check before I talk to ${who} or take any action?`;
+  }
+  if (card.tone === "attention") {
+    return `${focus}. How should I open the conversation with ${who}, and what should we agree on?`;
+  }
+  return `${focus}. What should I focus on with ${who}?`;
+}
+
 export function PrepareConversationButton({ card }: { card: BriefingCard }) {
   function openAssistant() {
     window.dispatchEvent(
@@ -11,7 +23,7 @@ export function PrepareConversationButton({ card }: { card: BriefingCard }) {
           employeeName: card.subject,
           cardTitle: card.title,
           cardBody: card.body,
-          prompt: "Help me prepare this conversation.",
+          prompt: promptForCard(card),
         },
       }),
     );

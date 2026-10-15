@@ -1,4 +1,5 @@
 import "server-only";
+import { isSoftDeleted } from "./soft-delete";
 import { FieldValue } from "firebase-admin/firestore";
 import { AuthorizationError, ConflictError, NotFoundError } from "@/lib/errors";
 import { adminDb } from "@/lib/firebase/admin";
@@ -48,7 +49,7 @@ export async function createInvite(
   await assertWorkspaceEmailAllowed(session.companyId, normalizedEmail);
   if (linkedEmployeeId) {
     const employee = await db.collection("employees").doc(linkedEmployeeId).get();
-    if (!employee.exists || employee.get("companyId") !== session.companyId) throw new AuthorizationError("Employee is not in your workspace.");
+    if (!employee.exists || employee.get("companyId") !== session.companyId || isSoftDeleted(employee)) throw new AuthorizationError("Employee is not in your workspace.");
   }
 
   const existingUser = await db

@@ -1,6 +1,7 @@
 import "server-only";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { TRIAL_DAYS, trialEndsAtFromCreatedAt } from "@/features/billing/subscription-status";
+import { accountBlockStateOf, type AccountBlockState } from "@/features/auth/account-block";
+import { isSoftDeleted } from "./soft-delete";
+import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
 import { appUserSchema, type AccountSettingsInput } from "@/schemas/auth.schema";
 import { AuthorizationError, NotFoundError } from "@/lib/errors";
@@ -17,6 +18,18 @@ export async function findUserById(uid: string): Promise<AppUser | null> {
   if (!snapshot.exists) return null;
 
   return { id: snapshot.id, ...appUserSchema.parse(snapshot.data()) };
+}
+
+/** Why this email's account can't sign in, or null if there's no such account or it is active. */
+export async function findAccountBlockByEmail(email: string): Promise<AccountBlockState | null> {
+  const snapshot = await adminDb()
+    .collection(USERS_COLLECTION)
+    .where("email", "==", email.trim().toLowerCase())
+    .limit(1)
+    .get();
+
+  const doc = snapshot.docs[0];
+  return doc ? accountBlockStateOf({ status: String(doc.get("status") ?? "active"), deletedAt: doc.get("deletedAt") }) : null;
 }
 
 export async function findActiveUserByEmail(email: string): Promise<AppUser | null> {
@@ -39,10 +52,29 @@ export async function findEmployeeIdByEmail(companyId: string, email: string): P
     .collection("employees")
     .where("companyId", "==", companyId)
     .where("email", "==", email.trim().toLowerCase())
-    .limit(1)
     .get();
 
-  return snapshot.docs[0]?.id ?? null;
+  return snapshot.docs.find((doc) => !isSoftDeleted(doc))?.id ?? null;
+}
+
+export function companyStatusFrom(value: unknown): CompanyStatus {
+  return value === "deleted" ? "deleted" : value === "blocked" ? "blocked" : "active";
+}
+
+export type CompanyStatus = "active" | "blocked" | "deleted";
+
+export async function findCompanySummaryById(
+  companyId: string,
+): Promise<{ name: string | null; status: CompanyStatus; deleteAfterMs: number | null } | null> {
+  const snapshot = await adminDb().collection(COMPANIES_COLLECTION).doc(companyId).get();
+  if (!snapshot.exists) return null;
+
+  const name = snapshot.get("name");
+  return {
+    name: typeof name === "string" && name.trim() ? name.trim() : null,
+    status: companyStatusFrom(snapshot.get("status")),
+    deleteAfterMs: snapshot.get("deleteAfter")?.toMillis?.() ?? null,
+  };
 }
 
 export async function findCompanyNameById(companyId: string): Promise<string | null> {
@@ -65,7 +97,6 @@ export async function provisionSignupWorkspace({
   const db = adminDb();
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
   const now = FieldValue.serverTimestamp();
-  const trialEndsAt = Timestamp.fromMillis(trialEndsAtFromCreatedAt(Date.now(), TRIAL_DAYS));
   const companyRef = db.collection(COMPANIES_COLLECTION).doc();
   const displayName = email.split("@")[0] || "Admin";
   const user: AppUser = {
@@ -87,8 +118,7 @@ export async function provisionSignupWorkspace({
     transaction.set(companyRef, {
       allowedEmailDomains: [emailDomain(email)],
       name: companyName,
-      subscriptionStatus: "trialing",
-      trialEndsAt,
+      subscriptionStatus: "free",
       createdAt: now,
       createdBy: uid,
       onboardingSource: "email_link_signup",
@@ -145,7 +175,7 @@ export async function provisionInvitedUser({
     }
     if (linkedEmployeeId) {
       const employee = await transaction.get(db.collection("employees").doc(linkedEmployeeId));
-      if (!employee.exists || employee.get("companyId") !== companyId) throw new AuthorizationError("Employee is not in your workspace.");
+      if (!employee.exists || employee.get("companyId") !== companyId || isSoftDeleted(employee)) throw new AuthorizationError("Employee is not in your workspace.");
     }
     transaction.set(userRef, userData);
     return { id: uid, companyId, email, displayName, role, status: "active" as const, linkedEmployeeId: linkedEmployeeId ?? undefined };

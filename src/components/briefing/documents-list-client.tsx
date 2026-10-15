@@ -3,6 +3,9 @@
 import { ArrowRight, Search } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { DensityItemContent, densityItemClass, densityListClass } from "@/components/briefing/density-list";
+import { ListDensityToggle } from "@/components/briefing/list-density-toggle";
+import type { ListDensity } from "@/features/preferences/layout-preferences";
 
 export type DocumentListItem = {
   id: string;
@@ -22,7 +25,14 @@ const typeFilterLabels: Record<TypeFilter, string> = {
   note: "Notes",
 };
 
-export function DocumentsListClient({ items }: { items: DocumentListItem[] }) {
+export function DocumentsListClient({
+  items,
+  initialDensity,
+}: {
+  items: DocumentListItem[];
+  initialDensity: ListDensity;
+}) {
+  const [density, setDensity] = useState(initialDensity);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -66,6 +76,7 @@ export function DocumentsListClient({ items }: { items: DocumentListItem[] }) {
           </label>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ListDensityToggle value={density} onChange={setDensity} />
             <div className="inline-flex rounded-xl bg-ink/70 p-1" role="group" aria-label="Filter documents by type">
               {typeFilters.map((filter) => {
                 const isActive = typeFilter === filter;
@@ -124,32 +135,27 @@ export function DocumentsListClient({ items }: { items: DocumentListItem[] }) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3">
+      <div className={`mt-4 ${densityListClass(density)}`}>
         {filteredItems.length ? (
           filteredItems.map((item) => (
             <Link
               key={item.id}
               href={item.href}
-              className="group grid gap-4 rounded-[14px] bg-paper/[0.045] px-4 py-4 text-left shadow-[inset_0_0_0_1px_rgba(244,239,231,0.035),inset_0_1px_0_rgba(244,239,231,0.04)] transition-colors hover:bg-paper/[0.075] md:grid-cols-[minmax(0,1fr)_170px] md:items-center"
+              className={`${densityItemClass(density)} hover:bg-paper/[0.075]`}
             >
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-paper/[0.10] px-3 py-1 font-mono text-[11px] uppercase text-paper-2 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.05)]">
-                    {item.label}
+              <DensityItemContent
+                density={density}
+                label={item.label}
+                meta={item.meta}
+                title={item.title}
+                body={item.body}
+                action={
+                  <span className="inline-flex items-center gap-2 rounded-full bg-paper/[0.08] px-3 py-2 text-xs font-semibold text-paper-2 transition-colors group-hover:bg-paper group-hover:text-ink">
+                    Open record
+                    <ArrowRight className="size-3.5" aria-hidden="true" />
                   </span>
-                  <span className="rounded-full bg-sun/12 px-3 py-1 text-xs font-semibold text-sun">
-                    {item.meta}
-                  </span>
-                </div>
-                <p className="mt-3 font-semibold text-paper">{item.title}</p>
-                <p className="mt-1 line-clamp-2 text-sm leading-6 text-paper-2">{item.body}</p>
-              </div>
-              <div className="flex items-center justify-start md:justify-end">
-                <span className="inline-flex items-center gap-2 rounded-full bg-paper/[0.08] px-3 py-2 text-xs font-semibold text-paper-2 transition-colors group-hover:bg-paper group-hover:text-ink">
-                  Open record
-                  <ArrowRight className="size-3.5" aria-hidden="true" />
-                </span>
-              </div>
+                }
+              />
             </Link>
           ))
         ) : (

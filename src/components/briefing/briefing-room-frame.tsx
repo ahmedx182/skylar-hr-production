@@ -1,14 +1,13 @@
-import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/briefing/account-menu";
+import { AppShellGrid } from "@/components/briefing/app-shell-grid";
 import { BriefingIndexNav, type IndexSection } from "@/components/briefing/briefing-index-nav";
 import { EmployeeSkylarChat } from "@/components/briefing/employee-skylar-chat";
 import { FloatingSkylarAction } from "@/components/briefing/floating-skylar-action";
 import { QuickActions } from "@/components/briefing/quick-actions";
-import { BILLING_PATH } from "@/constants/routes";
-import { getServerEnv } from "@/lib/env/server";
+import { PlatformNav, SidebarModeSwitch, type PlatformSection } from "@/components/platform/platform-nav";
+import { getLayoutPreferences } from "@/server/preferences/layout-preferences";
 import { countOpenEscalations } from "@/server/repositories/advisor-escalation.repository";
 import { listCompanyEmployees } from "@/server/repositories/briefing-read.repository";
-import { getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
 import type { AuthSession } from "@/types/auth";
 
 export async function BriefingRoomFrame({
@@ -16,22 +15,21 @@ export async function BriefingRoomFrame({
   active,
   children,
   quickActionEmployeeId,
+  mode = "workspace",
 }: {
   session: AuthSession;
-  active: IndexSection | string;
+  active: IndexSection | PlatformSection | string;
   children: React.ReactNode;
   quickActionEmployeeId?: string;
+  mode?: "workspace" | "platform";
 }) {
-  const paymentGateDisabled = getServerEnv().DEMO_DISABLE_PAYMENT_GATE;
-  if (active !== "Billing" && !paymentGateDisabled) {
-    const billing = await getOrCreateCompanyBillingState(session);
-    if (billing.access === "billing_required") redirect(BILLING_PATH);
-  }
-
-  const [employees, openEscalations] = await Promise.all([
-    listCompanyEmployees(session.companyId),
-    session.role === "admin" ? countOpenEscalations(session.companyId) : Promise.resolve(0),
-  ]);
+  const isPlatform = mode === "platform";
+  const [employees, openEscalations] = isPlatform
+    ? [[], 0]
+    : await Promise.all([
+        listCompanyEmployees(session.companyId),
+        session.role === "admin" ? countOpenEscalations(session.companyId) : Promise.resolve(0),
+      ]);
   const employeeOptions = employees.map((employee) => ({
     id: employee.id,
     name: employee.name,
@@ -40,46 +38,58 @@ export async function BriefingRoomFrame({
 
   return (
     <main className="min-h-dvh bg-ink text-paper">
-      <div className="flex min-h-dvh w-full flex-col px-4 py-3 md:px-5 md:py-4 2xl:px-7">
-        <header className="skylar-app-header flex items-center justify-between gap-4 px-1 py-1">
-          <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-h-dvh w-full flex-col px-4 pb-3 md:px-5 md:pb-4 lg:pl-3 2xl:pr-7">
+        <header className="skylar-app-header sticky top-0 z-20 -mx-4 flex h-14 items-center justify-between gap-4 border-b border-paper/10 bg-ink px-5 md:-mx-5 md:px-6 lg:-ml-3 lg:pl-5 2xl:-mr-7 2xl:pr-8">
+          <div className="flex min-w-0 items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="block size-11 bg-[url('/brand/logo.png')] bg-[length:38px_35px] bg-center bg-no-repeat"
+              className="block size-8 bg-[url('/brand/logo.png')] bg-[length:28px_26px] bg-center bg-no-repeat"
             />
-            <div className="min-w-0">
-              <p className="text-lg font-semibold">Skylar</p>
-              <p className="mt-0.5 truncate text-sm text-paper-3">Briefing Room</p>
-            </div>
+            <p className="truncate text-base font-semibold">
+              Skylar{" "}
+              <span className="ml-1.5 text-sm font-normal text-paper-3">
+                {isPlatform ? "Platform console" : "Briefing Room"}
+              </span>
+            </p>
+            {isPlatform && (
+              <span className="hidden rounded-full bg-sun/15 px-2.5 py-1 text-[11px] font-semibold text-sun sm:inline">
+                Super admin
+              </span>
+            )}
           </div>
           <AccountMenu session={session} />
         </header>
 
-        <section className="grid flex-1 gap-4 py-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)] 2xl:grid-cols-[256px_minmax(0,1fr)]">
-          <aside className="skylar-sidebar grid content-start gap-4 border-t border-paper/10 pt-4 lg:border-r lg:border-t-0 lg:pr-4 lg:pt-3">
-            <div>
-              <p className="text-xs font-semibold uppercase text-paper-3">Today&apos;s flow</p>
-              <p className="mt-2 max-w-sm text-sm leading-5 text-paper-2">
-                Guided first. Jump when needed.
-              </p>
-            </div>
-            <BriefingIndexNav active={active} role={session.role} linkedEmployeeId={session.linkedEmployeeId} advisorOpenCount={openEscalations} />
-            {session.role === "admin" && (
+        <AppShellGrid
+          initialCollapsed={getLayoutPreferences().navCollapsed}
+          title={isPlatform ? "Platform" : "Today's flow"}
+          tagline={isPlatform ? "Every workspace in one place." : "Guided first. Jump when needed."}
+          bottomSlot={session.isPlatformAdmin ? <SidebarModeSwitch mode={mode} /> : undefined}
+          sidebar={
+            isPlatform ? (
+              <PlatformNav active={active} />
+            ) : (
               <>
-                <div className="h-px bg-paper/10" />
-                <QuickActions
+                <BriefingIndexNav
+                  active={active}
                   role={session.role}
-                  employees={employeeOptions}
-                  initialEmployeeId={quickActionEmployeeId}
+                  linkedEmployeeId={session.linkedEmployeeId}
+                  advisorOpenCount={openEscalations}
                 />
+                {session.role === "admin" && (
+                  <>
+                    <div className="h-px bg-paper/10" />
+                    <QuickActions role={session.role} employees={employeeOptions} initialEmployeeId={quickActionEmployeeId} />
+                  </>
+                )}
               </>
-            )}
-          </aside>
-
-          <div className="skylar-page-content min-w-0">{children}</div>
-        </section>
+            )
+          }
+        >
+          {children}
+        </AppShellGrid>
       </div>
-      {session.role === "admin" ? <FloatingSkylarAction /> : <EmployeeSkylarChat />}
+      {!isPlatform && (session.role === "admin" ? <FloatingSkylarAction /> : <EmployeeSkylarChat />)}
     </main>
   );
 }

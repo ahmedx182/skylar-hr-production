@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { BriefingCard } from "@/components/briefing/briefing-card";
 import { BriefingHero } from "@/components/briefing/briefing-hero";
 import type { BriefingCard as BriefingCardModel } from "@/features/briefing/types";
@@ -36,9 +35,11 @@ export function BriefingDeckClient({
   const [pendingCardId, setPendingCardId] = useState<string | null>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [error, setError] = useState("");
-  const [isPending, startTransition] = useTransition();
   const activeCard = useMemo(() => cards[activeIndex] ?? cards[0] ?? initialCards[0], [activeIndex, cards, initialCards]);
   const nextCard = cards[activeIndex + 1];
+  const inFlightRef = useRef(0);
+  const advanceTimerRef = useRef<number | null>(null);
+  const activeCardIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (activeIndex >= cards.length) {
@@ -46,13 +47,43 @@ export function BriefingDeckClient({
     }
   }, [activeIndex, cards.length]);
 
-  function updateCard(cardId: string, action: "next" | "not_now") {
-    setPendingCardId(cardId);
-    setError("");
-    const shouldStack = action === "next";
-    setIsAdvancing(shouldStack);
+  activeCardIdRef.current = activeCard?.id;
 
-    startTransition(async () => {
+  useEffect(
+    () => () => {
+      if (advanceTimerRef.current) window.clearTimeout(advanceTimerRef.current);
+    },
+    [],
+  );
+
+  // Advances optimistically so the next card is clickable as soon as the animation ends;
+  // the server write runs in the background and is rolled back on failure.
+  function updateCard(cardId: string, action: "next" | "not_now") {
+    if (isAdvancing) return;
+    setError("");
+    const removedIndex = cards.findIndex((card) => card.id === cardId);
+    const removedCard = cards[removedIndex];
+    // The last card waits for the server, which replaces it with the "all clear" card.
+    const optimistic = removedIndex >= 0 && cards.length > 1;
+
+    if (optimistic) {
+      const removeCard = () => {
+        advanceTimerRef.current = null;
+        setCards((current) => current.filter((card) => card.id !== cardId));
+        setIsAdvancing(false);
+      };
+      if (action === "next") {
+        setIsAdvancing(true);
+        advanceTimerRef.current = window.setTimeout(removeCard, 420);
+      } else {
+        removeCard();
+      }
+    } else {
+      setPendingCardId(cardId);
+    }
+
+    inFlightRef.current += 1;
+    void (async () => {
       try {
         const response = await fetch("/api/briefing/today", {
           method: "POST",
@@ -69,26 +100,36 @@ export function BriefingDeckClient({
           );
         }
 
-        if (shouldStack) {
-          await new Promise((resolve) => window.setTimeout(resolve, 420));
-        }
-        setCards(payload.cards);
         setHasHiddenCards(payload.hasHiddenCards);
-        setActiveIndex(0);
+        // Only the last outstanding response reflects every action the user took.
+        if (inFlightRef.current === 1) {
+          const serverCards = payload.cards;
+          const keepIndex = serverCards.findIndex((card) => card.id === activeCardIdRef.current);
+          setCards(serverCards);
+          setActiveIndex(keepIndex >= 0 ? keepIndex : 0);
+        }
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : "Skylar could not update today's deck.");
+        if (optimistic && removedCard) {
+          setCards((current) => {
+            if (current.some((card) => card.id === cardId)) return current;
+            const next = [...current];
+            next.splice(Math.min(removedIndex, next.length), 0, removedCard);
+            return next;
+          });
+        }
       } finally {
-        setPendingCardId(null);
-        setIsAdvancing(false);
+        inFlightRef.current -= 1;
+        setPendingCardId((current) => (current === cardId ? null : current));
       }
-    });
+    })();
   }
 
   function resetDeck() {
     setPendingCardId("reset");
     setError("");
 
-    startTransition(async () => {
+    void (async () => {
       try {
         const response = await fetch("/api/briefing/today", {
           method: "POST",
@@ -107,11 +148,11 @@ export function BriefingDeckClient({
       } finally {
         setPendingCardId(null);
       }
-    });
+    })();
   }
 
   return (
-    <div className="grid h-full min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
+    <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
       <section className="grid min-w-0 content-start gap-4">
         {activeCard && (
           <div className="relative pb-6">
@@ -139,29 +180,35 @@ export function BriefingDeckClient({
                 card={activeCard}
                 position={activeIndex + 1}
                 total={cards.length}
-                isPending={isPending && pendingCardId === activeCard.id}
+                isPending={isAdvancing || pendingCardId === activeCard.id}
                 onAction={updateCard}
               />
             </div>
           </div>
         )}
         {hasHiddenCards && activeCard?.id === "system:clear" && (
-          <Button
-            variant="secondary"
-            disabled={isPending}
-            onClick={resetDeck}
-            className="w-fit gap-2 border-paper/15 px-4 text-paper-2 hover:bg-paper/[0.06]"
-          >
-            <RotateCcw className="size-4" aria-hidden="true" />
-            <span>{isPending && pendingCardId === "reset" ? "Resetting..." : "Reset briefing status"}</span>
-          </Button>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-paper/[0.045] px-4 py-3 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.05)]">
+            <p className="text-sm text-paper-3">Want to go through today&apos;s cards again?</p>
+            <button
+              type="button"
+              disabled={pendingCardId === "reset"}
+              onClick={resetDeck}
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-paper/[0.08] px-4 text-sm font-semibold text-paper transition-colors hover:bg-paper hover:text-ink disabled:cursor-wait disabled:opacity-60"
+            >
+              <RotateCcw
+                className={cn("size-4", pendingCardId === "reset" && "animate-spin [animation-direction:reverse]")}
+                aria-hidden="true"
+              />
+              {pendingCardId === "reset" ? "Restoring..." : "Restore today's cards"}
+            </button>
+          </div>
         )}
         {error && <p className="border-l-2 border-risk bg-risk/10 px-4 py-3 text-sm leading-6 text-risk">{error}</p>}
 
         <BriefingHero />
       </section>
 
-      <aside className="grid min-w-0 content-start gap-4 border-t border-paper/10 pt-4 xl:border-l xl:border-t-0 xl:pl-4 xl:pt-3">
+      <aside className="grid min-w-0 content-start gap-4 border-t border-paper/10 pt-4 xl:sticky xl:top-[72px] xl:max-h-[calc(100dvh-88px)] xl:overflow-y-auto xl:overscroll-contain xl:border-l xl:border-t-0 xl:pl-4 xl:pr-1 xl:pt-3">
         <div>
           <p className="text-sm font-semibold text-paper">What&apos;s ahead</p>
           <div className="mt-4 grid gap-1">

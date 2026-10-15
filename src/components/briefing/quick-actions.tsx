@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import type { FormEvent, InputHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { RailTooltip } from "@/components/briefing/rail-tooltip";
 import { DOCUMENTS_PATH, PEOPLE_PATH } from "@/constants/routes";
 import {
   createEmployeeAction,
@@ -55,8 +56,8 @@ export function QuickActions({
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase text-paper-3">Create</p>
-      <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-1">
+      <p className="pl-2 text-xs font-semibold uppercase text-paper-3 lg:group-data-[collapsed=true]/shell:hidden">Create</p>
+      <div className="mt-1.5 grid grid-cols-2 gap-0.5 lg:grid-cols-1">
         {actions.map((action) => {
           const Icon = canCreate ? action.icon : Lock;
 
@@ -65,16 +66,17 @@ export function QuickActions({
               key={action.id}
               type="button"
               disabled={!canCreate}
+              aria-label={action.label}
               onClick={() => setActiveAction(action.id)}
-              className="group rounded-2xl bg-paper/[0.06] px-3 py-3 text-left transition-colors hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:bg-paper/[0.04] disabled:opacity-70"
+              className="group relative grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-sun/10 disabled:cursor-not-allowed disabled:opacity-60 lg:group-data-[collapsed=true]/shell:size-10 lg:group-data-[collapsed=true]/shell:grid-cols-1 lg:group-data-[collapsed=true]/shell:place-items-center lg:group-data-[collapsed=true]/shell:justify-self-center lg:group-data-[collapsed=true]/shell:p-0"
             >
-              <span className="grid size-8 place-items-center rounded-xl bg-ink/20 text-paper-2 group-hover:bg-ink group-hover:text-paper">
+              <span className="grid size-7 place-items-center rounded-lg bg-sun/15 text-sun transition-colors group-hover:bg-sun group-hover:text-ink group-disabled:bg-paper/[0.08] group-disabled:text-paper-3">
                 <Icon className="size-4" aria-hidden="true" />
               </span>
-              <span className="mt-3 block truncate text-sm font-semibold">{action.label}</span>
-              <span className="mt-0.5 block truncate text-xs text-paper-3 group-hover:text-ink/55">
-                {canCreate ? action.description : "Admin only"}
+              <span className="min-w-0 truncate text-sm font-medium text-paper lg:group-data-[collapsed=true]/shell:hidden">
+                {action.label}
               </span>
+              <RailTooltip label={action.label} />
             </button>
           );
         })}

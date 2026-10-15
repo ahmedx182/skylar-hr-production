@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       await markCheckoutCompleted(
         checkout.id,
         typeof checkout.subscription === "string" ? checkout.subscription : checkout.subscription?.id,
+        checkout.metadata?.companyId,
       );
     }
 

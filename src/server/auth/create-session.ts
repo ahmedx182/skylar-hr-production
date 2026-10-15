@@ -1,9 +1,11 @@
 import "server-only";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import { SESSION_MAX_AGE_MS } from "@/constants/auth";
-import { AuthenticationError } from "@/lib/errors";
+import { accountBlockStateOf } from "@/features/auth/account-block";
+import { AccountBlockedError, AuthenticationError } from "@/lib/errors";
 import { adminAuth } from "@/lib/firebase/admin";
 import {
+  findCompanySummaryById,
   findUserById,
   provisionInvitedUser,
   provisionSignupWorkspace,
@@ -13,10 +15,19 @@ import {
   findPendingInviteByEmail,
 } from "@/server/repositories/invite.repository";
 import { isFirebaseAuthError } from "./firebase-auth-error";
+import { isPlatformAdminEmail } from "./platform-admin-email";
+import { WORKSPACE_DELETED_MESSAGE, WORKSPACE_SUSPENDED_MESSAGE } from "@/constants/auth";
 import { assertWorkspaceEmailAllowed } from "./workspace-domain";
 
 /** Only a sign-in this recent may be exchanged, so a stolen older ID token is useless (Firebase guidance). */
 const MAX_SIGN_IN_AGE_SECONDS = 5 * 60;
+
+async function assertWorkspaceActive(companyId: string, email: string) {
+  if (isPlatformAdminEmail(email, true)) return;
+  const company = await findCompanySummaryById(companyId);
+  if (company?.status === "deleted") throw new AuthenticationError(WORKSPACE_DELETED_MESSAGE);
+  if (company?.status === "blocked") throw new AuthenticationError(WORKSPACE_SUSPENDED_MESSAGE);
+}
 
 export interface CreatedSession {
   cookie: string;
@@ -51,10 +62,10 @@ export async function createSession(
   }
 
   const user = await findUserById(decoded.uid);
-  if (user && user.status !== "active") {
-    throw new AuthenticationError("This account is disabled. Contact your workspace admin.");
-  }
+  const accountBlock = user ? accountBlockStateOf(user) : null;
+  if (accountBlock) throw new AccountBlockedError(accountBlock);
   if (user?.role === "employee") await assertWorkspaceEmailAllowed(user.companyId, email);
+  if (user) await assertWorkspaceActive(user.companyId, email);
   if (!user) {
     if (signup) {
       await provisionSignupWorkspace({ uid: decoded.uid, email, companyName: signup.companyName });
@@ -63,6 +74,7 @@ export async function createSession(
       if (!invite) {
         throw new AuthenticationError("This email has not been added to Skylar.");
       }
+      await assertWorkspaceActive(invite.companyId, email);
       await provisionInvitedUser({
         uid: decoded.uid,
         email,

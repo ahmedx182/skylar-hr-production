@@ -11,6 +11,7 @@ const config: Config = {
       ink: { DEFAULT: "#0B0B0E", 2: "#15151B", 3: "#1F1F27" },
       paper: { DEFAULT: "#F2EFE8", 2: "#B4B0A6", 3: "#7E7B74" },
       attention: "#F2A93B",
+      sun: "#F5AD44",
       risk: "#FF4A45",
       success: "#4CD07D",
       hairline: "rgba(242, 239, 232, 0.12)",

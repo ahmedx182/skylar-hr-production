@@ -1,11 +1,11 @@
 "use client";
 
-import { sendSignInLinkToEmail } from "firebase/auth";
 import { useState } from "react";
 import { EmailForm } from "@/components/auth/email-form";
 import { VERIFY_PATH } from "@/constants/routes";
 import { clearPendingSignup, saveMagicEmail } from "@/features/auth/magic-email";
-import { getFirebaseAuth } from "@/lib/firebase/client";
+import { AccountBlockedClientError, accountBlockPath } from "@/features/auth/account-block";
+import { sendSignInLink } from "@/features/auth/send-sign-in-link";
 
 type Status =
   | { phase: "idle" }
@@ -39,7 +39,8 @@ function authErrorMessage(error: unknown) {
   return "The link could not be sent. Try again.";
 }
 
-async function assertEmailCanSignIn(email: string) {
+/** Returns the explanation page to show when the account is suspended or deleted, otherwise null. */
+async function assertEmailCanSignIn(email: string): Promise<string | null> {
   const response = await fetch("/api/auth/allowed-email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -51,10 +52,12 @@ async function assertEmailCanSignIn(email: string) {
     throw new Error(result?.error?.message || "Skylar could not check access for this email. Try again.");
   }
 
-  const result = (await response.json()) as { allowed?: boolean };
+  const result = (await response.json()) as { allowed?: boolean; accountState?: "suspended" | "deleted" };
+  if (result.accountState) return accountBlockPath(result.accountState);
   if (!result.allowed) {
     throw new Error("This email has not been added to Skylar. Ask an admin to add it first.");
   }
+  return null;
 }
 
 export function LoginForm() {
@@ -63,12 +66,17 @@ export function LoginForm() {
   async function requestLink(email: string) {
     setStatus({ phase: "idle" });
     try {
-      await assertEmailCanSignIn(email);
-      await sendSignInLinkToEmail(getFirebaseAuth(), email, {
-        url: signInLinkUrl(),
-        handleCodeInApp: true,
-      });
+      const blockedPath = await assertEmailCanSignIn(email);
+      if (blockedPath) {
+        window.location.assign(blockedPath);
+        return;
+      }
+      await sendSignInLink({ purpose: "login", email }, signInLinkUrl());
     } catch (error) {
+      if (error instanceof AccountBlockedClientError) {
+        window.location.assign(error.path);
+        return;
+      }
       console.error("Magic-link send failed", error);
       setStatus({ phase: "failed", message: authErrorMessage(error) });
       return;

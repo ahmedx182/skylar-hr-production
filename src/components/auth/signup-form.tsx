@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { sendSignInLinkToEmail } from "firebase/auth";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
@@ -9,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { VERIFY_PATH } from "@/constants/routes";
 import { saveMagicEmail, savePendingSignup } from "@/features/auth/magic-email";
-import { getFirebaseAuth } from "@/lib/firebase/client";
+import { AccountBlockedClientError } from "@/features/auth/account-block";
+import { sendSignInLink } from "@/features/auth/send-sign-in-link";
 import { signupSchema } from "@/schemas/auth.schema";
 
 export function SignupForm() {
@@ -34,13 +34,15 @@ export function SignupForm() {
       // Carry setup through the email link even when opened on another device.
       // The server checks the verified email's domain again before provisioning.
       url.searchParams.set("companyName", input.companyName);
-      await sendSignInLinkToEmail(getFirebaseAuth(), input.email, {
-        url: url.toString(), handleCodeInApp: true,
-      });
+      await sendSignInLink({ purpose: "signup", email: input.email, companyName: input.companyName }, url.toString());
       saveMagicEmail(input.email);
       savePendingSignup(input);
       setSentEmail(input.email);
     } catch (cause) {
+      if (cause instanceof AccountBlockedClientError) {
+        window.location.assign(cause.path);
+        return;
+      }
       setError(cause instanceof Error ? cause.message : "Could not send your verification link. Try again.");
     }
   }
