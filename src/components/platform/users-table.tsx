@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Ban, Crown, RotateCcw, Search, ShieldCheck, Trash2, Undo2 } from "lucide-react";
+import { Ban, Crown, RotateCcw, Search, ShieldCheck, ShieldMinus, ShieldPlus, Trash2, Undo2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { UserActionDialog, type UserDialogAction } from "@/components/platform/user-action-dialog";
 import { WorkspaceStatusBadge } from "@/components/platform/workspace-badges";
@@ -103,19 +103,32 @@ function AccountBadge({ user }: { user: DirectoryUser }) {
 }
 
 function RowActions({ user, onAct }: { user: DirectoryUser; onAct: (action: UserDialogAction) => void }) {
-  if (user.protectedReason) {
-    const isSelf = user.protectedReason === "self";
+  const base = "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors";
+
+  if (user.protectedReason === "self") {
     return (
-      <span
-        className="inline-flex cursor-help rounded-full bg-paper/[0.06] px-2.5 py-1 text-[11px] font-semibold text-paper-3"
-        title={isSelf ? "This is your account. You can't suspend or delete yourself." : "Super admins can't be suspended or deleted from the console. Remove them from PLATFORM_ADMIN_EMAILS first."}
-      >
-        {isSelf ? "You" : "Super admin"}
+      <span className="inline-flex cursor-help rounded-full bg-paper/[0.06] px-2.5 py-1 text-[11px] font-semibold text-paper-3" title="This is your account. You can't change your own access.">
+        You
       </span>
     );
   }
 
-  const base = "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors";
+  if (user.superAdmin) {
+    return (
+      <div className="flex items-center justify-end gap-1.5">
+        <span
+          className="inline-flex cursor-help rounded-full bg-paper/[0.06] px-2.5 py-1 text-[11px] font-semibold text-paper-3"
+          title="Super admins can't be suspended or deleted. Remove their super admin access first."
+        >
+          Super admin
+        </span>
+        <button type="button" onClick={() => onAct("revoke_admin")} aria-label={`Remove super admin from ${user.email}`} title="Remove super admin" className={cn(base, "bg-paper/[0.08] px-2.5 text-paper hover:bg-paper hover:text-ink")}>
+          <ShieldMinus className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
   if (user.accountState === "deleted") {
     return (
       <button type="button" onClick={() => onAct("restore")} className={cn(base, "bg-success/15 text-success hover:bg-success hover:text-ink")}>
@@ -126,6 +139,11 @@ function RowActions({ user, onAct }: { user: DirectoryUser; onAct: (action: User
   }
   return (
     <div className="flex items-center justify-end gap-1.5">
+      {user.accountState === "active" && (
+        <button type="button" onClick={() => onAct("grant_admin")} aria-label={`Make ${user.email} a super admin`} title="Make super admin" className={cn(base, "bg-paper/[0.08] px-2.5 text-paper hover:bg-paper hover:text-ink")}>
+          <ShieldPlus className="size-3.5" aria-hidden="true" />
+        </button>
+      )}
       {user.accountState === "suspended" ? (
         <button type="button" onClick={() => onAct("unsuspend")} className={cn(base, "bg-success/15 text-success hover:bg-success hover:text-ink")}>
           <ShieldCheck className="size-3.5" aria-hidden="true" />

@@ -51,7 +51,7 @@ describe("createSession", () => {
     mocks.findPendingInviteByEmail.mockResolvedValue(null);
     mocks.acceptInvite.mockResolvedValue(undefined);
     mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "active" });
-    mocks.isPlatformAdminEmail.mockReturnValue(false);
+    mocks.isPlatformAdminEmail.mockResolvedValue(false);
     mocks.findUserById.mockResolvedValue({
       id: "u1",
       companyId: "company-1",
@@ -215,7 +215,7 @@ describe("createSession", () => {
 
   it("lets a platform admin sign in even when their workspace is suspended", async () => {
     mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "blocked" });
-    mocks.isPlatformAdminEmail.mockReturnValue(true);
+    mocks.isPlatformAdminEmail.mockResolvedValue(true);
 
     await expect(createSession("id-token")).resolves.toMatchObject({ cookie: "signed-cookie" });
   });

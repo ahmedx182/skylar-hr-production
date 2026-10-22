@@ -66,7 +66,7 @@ export type PlatformAuditEntry = {
 };
 
 export type WorkspaceAction = "block" | "unblock" | "grant_paid" | "revoke_paid";
-export type UserAuditAction = "user_suspend" | "user_unsuspend" | "user_delete" | "user_restore" | "user_purge";
+export type UserAuditAction = "user_suspend" | "user_unsuspend" | "user_delete" | "user_restore" | "user_purge" | "platform_admin_grant" | "platform_admin_revoke";
 export type PlatformAction = WorkspaceAction | "delete" | "restore_workspace" | "purge" | PackageAuditAction | UserAuditAction;
 
 export type WorkspaceUser = {

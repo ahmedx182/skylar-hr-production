@@ -38,7 +38,7 @@ describe("resolveSession", () => {
     mocks.verifySessionCookie.mockResolvedValue({ uid: "u1", email: "m@acme.com" });
     mocks.findUserById.mockResolvedValue(activeUser);
     mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "active", deleteAfterMs: null });
-    mocks.isPlatformAdminEmail.mockReturnValue(false);
+    mocks.isPlatformAdminEmail.mockResolvedValue(false);
   });
 
   it("returns null without a cookie and never calls Firebase", async () => {
@@ -68,7 +68,7 @@ describe("resolveSession", () => {
 
   it("flags a suspended workspace and a platform admin from server-side records", async () => {
     mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "blocked" });
-    mocks.isPlatformAdminEmail.mockReturnValue(true);
+    mocks.isPlatformAdminEmail.mockResolvedValue(true);
     mocks.verifySessionCookie.mockResolvedValue({ uid: "u1", email: "m@acme.com", email_verified: true });
 
     expect(await resolveSession("cookie")).toMatchObject({ workspaceBlocked: true, isPlatformAdmin: true });

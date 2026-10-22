@@ -15,6 +15,7 @@ const user = (overrides: Partial<DirectoryUser> & { id: string }): DirectoryUser
   isOwner: false,
   isOnlyAdmin: false,
   protectedReason: null,
+  superAdmin: null,
   ...overrides,
 });
 

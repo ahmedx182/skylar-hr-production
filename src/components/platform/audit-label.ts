@@ -13,6 +13,8 @@ const labels: Record<PlatformAction, string> = {
   user_delete: "Deleted user account",
   user_restore: "Restored deleted user",
   user_purge: "Permanently removed user",
+  platform_admin_grant: "Granted super admin",
+  platform_admin_revoke: "Removed super admin",
   package_create: "Created package",
   package_update: "Updated package",
   package_archive: "Archived package",

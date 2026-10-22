@@ -58,7 +58,7 @@ export async function applyUserAction({
   const isSuspended = snapshot.get("status") === "disabled" && !isDeleted;
 
   if (userId === actor.uid) throw new ConflictError("You can't change your own account.");
-  if (isPlatformAdminEmail(email, true)) throw new ConflictError("Platform admins can't be changed from the console.");
+  if (await isPlatformAdminEmail(email, true)) throw new ConflictError("Super admins can't be suspended or deleted. Remove their super admin access first.");
 
   const now = FieldValue.serverTimestamp();
   let patch: Record<string, unknown>;

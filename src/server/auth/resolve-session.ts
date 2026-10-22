@@ -38,7 +38,7 @@ export async function resolveSession(cookie: string | undefined): Promise<AuthSe
     companyName: company?.name ?? null,
     role: user.role,
     linkedEmployeeId,
-    isPlatformAdmin: isPlatformAdminEmail(claims.email, claims.email_verified === true),
+    isPlatformAdmin: await isPlatformAdminEmail(claims.email, claims.email_verified === true),
     workspaceBlocked: Boolean(company) && company!.status !== "active",
     workspaceDeleteAfterMs: company?.status === "deleted" ? company.deleteAfterMs : null,
   };

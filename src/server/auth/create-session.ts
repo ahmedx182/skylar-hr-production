@@ -22,7 +22,7 @@ import { WORKSPACE_DELETED_MESSAGE, WORKSPACE_SUSPENDED_MESSAGE } from "@/consta
 const MAX_SIGN_IN_AGE_SECONDS = 5 * 60;
 
 async function assertWorkspaceActive(companyId: string, email: string) {
-  if (isPlatformAdminEmail(email, true)) return;
+  if (await isPlatformAdminEmail(email, true)) return;
   const company = await findCompanySummaryById(companyId);
   if (company?.status === "deleted") throw new AuthenticationError(WORKSPACE_DELETED_MESSAGE);
   if (company?.status === "blocked") throw new AuthenticationError(WORKSPACE_SUSPENDED_MESSAGE);

@@ -4,7 +4,7 @@ import { ConflictError, ExternalServiceError, NotFoundError, ValidationError } f
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { getServerEnv } from "@/lib/env/server";
 import { deleteAfterMs, isPurgeDue } from "@/features/platform/lifecycle";
-import { isPlatformAdminEmail } from "@/server/auth/platform-admin-email";
+import { listPlatformAdmins, normalizeEmail } from "@/server/auth/platform-admin-email";
 import { stripe } from "@/server/stripe/client";
 import type { AuthSession } from "@/types/auth";
 
@@ -76,9 +76,12 @@ export async function softDeleteWorkspace({
   if (company.status === "deleted") throw new ConflictError("This workspace is already deleted.");
   if (companyId === actor.companyId) throw new ConflictError("You can't delete your own workspace.");
 
-  const members = await db.collection("users").where("companyId", "==", companyId).select("email").get();
-  if (members.docs.some((doc) => isPlatformAdminEmail(doc.get("email"), true))) {
-    throw new ConflictError("This workspace includes a platform admin. Remove them from PLATFORM_ADMIN_EMAILS first.");
+  const [members, platformAdmins] = await Promise.all([
+    db.collection("users").where("companyId", "==", companyId).select("email").get(),
+    listPlatformAdmins(),
+  ]);
+  if (members.docs.some((doc) => typeof doc.get("email") === "string" && platformAdmins.has(normalizeEmail(doc.get("email"))))) {
+    throw new ConflictError("This workspace includes a super admin. Remove their super admin access first.");
   }
 
   // Stop billing first, so a failure leaves the workspace untouched rather than deleted but still charging.

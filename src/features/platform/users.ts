@@ -24,8 +24,17 @@ export type DirectoryUser = {
   isOwner: boolean;
   /** The only active admin of their workspace, so removing them leaves it unmanaged. */
   isOnlyAdmin: boolean;
-  /** Why this account can't be changed from the console: it is yours, or it belongs to another super admin. */
+  /** Why this account can't be suspended or deleted: it is yours, or it belongs to a super admin. */
   protectedReason: "self" | "super_admin" | null;
+  /** Super admin access and where it comes from: PLATFORM_ADMIN_EMAILS ("env") or the console ("console"). */
+  superAdmin: "env" | "console" | null;
+};
+
+/** One super admin for the console's list. They may not have signed up yet. */
+export type SuperAdminRow = {
+  email: string;
+  hasAccount: boolean;
+  isYou: boolean;
 };
 
 export function accountStateOf(user: { status: string; deleted: boolean }): AccountState {

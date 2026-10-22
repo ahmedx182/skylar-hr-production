@@ -7,7 +7,7 @@ import { DELETION_GRACE_DAYS } from "@/features/platform/lifecycle";
 import { displayName, type DirectoryUser } from "@/features/platform/users";
 import { cn } from "@/lib/utils/cn";
 
-export type UserDialogAction = "suspend" | "unsuspend" | "delete" | "restore";
+export type UserDialogAction = "suspend" | "unsuspend" | "delete" | "restore" | "grant_admin" | "revoke_admin";
 
 type Copy = { title: string; body: string; confirm: string; reasonLabel: string; reasonRequired: boolean; needsEmail?: boolean; danger?: boolean };
 
@@ -40,6 +40,21 @@ const copy: Record<UserDialogAction, Copy> = {
     title: "Restore this account?",
     body: "The account is brought back with its previous access.",
     confirm: "Restore account",
+    reasonLabel: "Note (optional)",
+    reasonRequired: false,
+  },
+  grant_admin: {
+    title: "Make this person a super admin?",
+    body: "They get the platform console: every workspace, user, package and billing setting across Skylar. It applies on their next page load.",
+    confirm: "Make super admin",
+    reasonLabel: "Reason (shown in the audit log)",
+    reasonRequired: true,
+    danger: true,
+  },
+  revoke_admin: {
+    title: "Remove super admin access?",
+    body: "They lose the platform console on their next page load. Their own workspace access is unchanged.",
+    confirm: "Remove super admin",
     reasonLabel: "Note (optional)",
     reasonRequired: false,
   },
@@ -77,10 +92,15 @@ export function UserActionDialog({ user, action, onClose }: { user: DirectoryUse
     setIsSaving(true);
     setError("");
     try {
-      const response = await fetch(`/api/platform/users/${encodeURIComponent(user.id)}`, {
+      const isAdminChange = action === "grant_admin" || action === "revoke_admin";
+      const response = await fetch(isAdminChange ? "/api/platform/admins" : `/api/platform/users/${encodeURIComponent(user.id)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, reason: reason.trim() || undefined, confirmEmail: details.needsEmail ? typedEmail.trim() : undefined }),
+        body: JSON.stringify(
+          isAdminChange
+            ? { action: action === "grant_admin" ? "grant" : "revoke", email: user.email, reason: reason.trim() || undefined }
+            : { action, reason: reason.trim() || undefined, confirmEmail: details.needsEmail ? typedEmail.trim() : undefined },
+        ),
       });
       const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
       if (!response.ok) throw new Error(payload?.error?.message ?? "That change could not be saved.");

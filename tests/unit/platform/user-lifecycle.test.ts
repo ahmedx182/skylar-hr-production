@@ -19,7 +19,7 @@ vi.mock("@/lib/firebase/admin", () => ({
   adminAuth: () => ({ revokeRefreshTokens: mocks.revokeRefreshTokens, deleteUser: mocks.deleteUser }),
 }));
 vi.mock("@/server/auth/platform-admin-email", () => ({
-  isPlatformAdminEmail: (email: string) => email === "boss@skylar.app",
+  isPlatformAdminEmail: async (email: string) => email === "boss@skylar.app",
 }));
 
 import { applyUserAction, purgeExpiredUsers } from "@/server/platform/user-lifecycle";
@@ -129,7 +129,7 @@ describe("guards", () => {
   });
 
   it("won't touch another platform admin", async () => {
-    await expect(act("boss", "suspend", { reason: "coup" })).rejects.toThrow(/Platform admins/);
+    await expect(act("boss", "suspend", { reason: "coup" })).rejects.toThrow(/Super admins/);
     expect(db.read("users", "boss")?.status).toBe("active");
     expect(db.all("platform_audit_log")).toEqual([]);
   });
