@@ -39,6 +39,9 @@ const conversationQuerySchema = z.object({
   page: z.coerce.number().int().min(0).max(20).default(0),
 });
 
+/** Earlier turns with this person that the manager chat remembers. */
+const MANAGER_HISTORY_MESSAGES = 30;
+
 function conversationError(error: unknown) {
   if (error instanceof AppError) return error;
   const message = error instanceof Error ? error.message : "";
@@ -81,7 +84,7 @@ export async function POST(request: NextRequest) {
     const allowance = env.DEMO_DISABLE_PAYMENT_GATE ? { reserved: false } : await reserveAdvisorMessage(session);
     if (allowance.reserved) refund = () => releaseAdvisorMessage(session);
     const isEmployee = session.role === "employee";
-    const history = isEmployee ? [] : await listSkylarConversationMessages(session, input);
+    const history = isEmployee ? [] : await listSkylarConversationMessages(session, input, MANAGER_HISTORY_MESSAGES);
     // Managers: the selected person's notes are loaded here, so the chat sees them wherever it was opened.
     const employeeContext = !isEmployee && input.employeeId ? await buildEmployeeFileContext(session.companyId, input.employeeId) : null;
     // Employees only send a prompt; their name comes from the session, never from the client.

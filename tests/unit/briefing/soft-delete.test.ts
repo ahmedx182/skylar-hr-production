@@ -48,6 +48,11 @@ describe("soft-deleted records are hidden everywhere they are read", () => {
     await expect(getCompanyEmployee("acme", "ana")).resolves.toMatchObject({ name: "Ana Active" });
   });
 
+  it("refuses another workspace's employee and notes", async () => {
+    await expect(getCompanyEmployee("acme", "other")).rejects.toThrow(/not found/i);
+    await expect(listEmployeeLedger("acme", "other")).rejects.toThrow(/not found/i);
+  });
+
   it("hides deleted notes and the notes of deleted employees from the ledger", async () => {
     const ids = (await listCompanyLedger("acme")).map((entry) => entry.id);
     expect(ids).toEqual(["n1"]);

@@ -24,8 +24,23 @@ describe("buildEmployeeFileContext", () => {
     expect(mocks.getCompanyEmployee).toHaveBeenCalledWith("tenant-a", "e1");
     expect(context?.name).toBe("topg");
     expect(context?.file).toContain("Role: Engineer");
-    expect(context?.file).toContain("[2026-10-22, note] Situation: I need to have a hard performance conversation");
+    expect(context?.file).toContain("[2026-10-22, note]\nSituation: I need to have a hard performance conversation");
     expect(context!.file.indexOf("hard performance")).toBeLessThan(context!.file.indexOf("Older note"));
+  });
+
+  it("includes every note but leaves chat transcripts to the conversation history", async () => {
+    mocks.getCompanyEmployee.mockResolvedValue(employee);
+    mocks.listEmployeeLedger.mockResolvedValue([
+      { type: "conversation", description: "Manager: hi\nSkylar: I can't see the note", dateMs: Date.UTC(2026, 9, 23) },
+      ...Array.from({ length: 12 }, (_, i) => ({ type: "note", description: `Note ${i + 1}`, dateMs: Date.UTC(2026, 9, 20 - i) })),
+    ]);
+
+    const file = (await buildEmployeeFileContext("tenant-a", "e1"))!.file;
+
+    expect(file).toContain("All saved notes (12)");
+    expect(file).toContain("Note 1");
+    expect(file).toContain("Note 12");
+    expect(file).not.toContain("I can't see the note");
   });
 
   it("says when there are no notes yet", async () => {
