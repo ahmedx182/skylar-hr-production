@@ -78,7 +78,7 @@ function buildUserPrompt(input: SkylarConversationInput): string {
     `Manager request: ${input.prompt}`,
     ...(input.escalationNotice
       ? [input.escalationNotice]
-      : ["Reply rule: your reply must contain concrete guidance the manager can use today and at least one line they could say out loud, in quotes. This applies even when the request is short or vague: make a reasonable assumption, say what it is, and advise on it. A reply that only asks questions is not allowed. Never invent facts, names, projects, dates or numbers that are not in the file or the conversation; where a specific is missing, use a bracketed placeholder such as [the project] or [the date]. At most one question, and only at the end."]),
+      : ["Reply rule: your reply must contain concrete guidance the manager can use today and at least one line they could say out loud, in quotes. This applies even when the request is short or vague: make a reasonable assumption, say what it is, and advise on it. A reply that only asks questions is not allowed. Never invent facts, names, projects, dates or numbers that are not in the file or the conversation; where a specific is missing, use a bracketed placeholder such as [the project] or [the date]. Do not assume anyone's gender: refer to the employee by name or as they/them unless the file or the manager states their pronouns. At most one question, and only at the end."]),
   ].join("\n\n");
 }
 

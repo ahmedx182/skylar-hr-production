@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { AppError, ExternalServiceError, toErrorResponse, ValidationError } from "@/lib/errors";
+import { AppError, ExternalServiceError, NotFoundError, toErrorResponse, ValidationError } from "@/lib/errors";
 import { getServerEnv } from "@/lib/env/server";
 import { assertWithinRateLimit } from "@/server/ai/rate-limit";
 import {
@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
     const history = isEmployee ? [] : await listSkylarConversationMessages(session, input, MANAGER_HISTORY_MESSAGES);
     // Managers: the selected person's notes are loaded here, so the chat sees them wherever it was opened.
     const employeeContext = !isEmployee && input.employeeId ? await buildEmployeeFileContext(session.companyId, input.employeeId) : null;
+    // A person outside this workspace (or deleted) is refused before Skylar is asked anything.
+    if (!isEmployee && input.employeeId && !employeeContext) throw new NotFoundError("Employee not found.");
     // Employees only send a prompt; their name comes from the session, never from the client.
     const chatInput = isEmployee
       ? { prompt: input.prompt, employeeName: session.displayName ?? undefined }

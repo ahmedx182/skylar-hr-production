@@ -61,15 +61,14 @@ describe("manager chat context", () => {
     );
   });
 
-  it("sends no file when the employee belongs to another workspace", async () => {
+  it("refuses another workspace's employee before asking Skylar", async () => {
     mocks.buildEmployeeFileContext.mockResolvedValue(null);
 
-    await (await post({ prompt: "Review the latest note", employeeId: "other-tenant-employee" })).text();
+    const response = await post({ prompt: "Review the latest note", employeeId: "other-tenant-employee" });
 
-    expect(mocks.streamSkylarConversation).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ employeeFile: undefined }),
-    );
+    expect(response.status).toBe(404);
+    expect(mocks.streamSkylarConversation).not.toHaveBeenCalled();
+    expect(mocks.appendSkylarConversationTurn).not.toHaveBeenCalled();
   });
 
   it("never gives an employee's own chat the manager notes", async () => {
