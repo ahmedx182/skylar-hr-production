@@ -9,6 +9,7 @@ import {
   type ChatEscalationOutcome,
 } from "@/features/briefing/chat-escalation";
 import { escalateFromChat } from "@/server/ai/chat-escalation";
+import { buildEmployeeFileContext } from "@/server/ai/employee-context";
 import { streamSkylarConversation } from "@/server/ai/skylar-conversation";
 import { requireSession } from "@/server/auth/require-session";
 import { parseJsonBody } from "@/server/http/parse-json-body";
@@ -81,8 +82,12 @@ export async function POST(request: NextRequest) {
     if (allowance.reserved) refund = () => releaseAdvisorMessage(session);
     const isEmployee = session.role === "employee";
     const history = isEmployee ? [] : await listSkylarConversationMessages(session, input);
+    // Managers: the selected person's notes are loaded here, so the chat sees them wherever it was opened.
+    const employeeContext = !isEmployee && input.employeeId ? await buildEmployeeFileContext(session.companyId, input.employeeId) : null;
     // Employees only send a prompt; their name comes from the session, never from the client.
-    const chatInput = isEmployee ? { prompt: input.prompt, employeeName: session.displayName ?? undefined } : input;
+    const chatInput = isEmployee
+      ? { prompt: input.prompt, employeeName: session.displayName ?? undefined }
+      : { ...input, employeeName: employeeContext?.name ?? input.employeeName, employeeFile: employeeContext?.file };
     // Managers: high-risk messages are escalated server-side and the bot is told what happened.
     const escalation: ChatEscalationOutcome = isEmployee
       ? { kind: "none" }
