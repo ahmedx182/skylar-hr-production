@@ -3,6 +3,8 @@ import type { PlatformAction } from "@/server/repositories/platform.repository";
 const labels: Record<PlatformAction, string> = {
   block: "Suspended workspace",
   unblock: "Restored access",
+  gift_access: "Gifted access",
+  end_gift: "Ended gifted access",
   grant_paid: "Granted paid access",
   revoke_paid: "Revoked paid access",
   delete: "Deleted workspace",

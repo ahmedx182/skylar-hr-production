@@ -1,15 +1,20 @@
 import "server-only";
-import { FieldValue, type DocumentData, type Firestore } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, type DocumentData, type Firestore } from "firebase-admin/firestore";
 import {
   billingPlanForState,
+  GIFT_MAX_DAYS,
+  GIFT_MAX_MESSAGES,
+  isGiftActive,
   normalizeBillingStatus,
+  planGiftFrom,
   type BillingPlan,
   type BillingStatus,
+  type PlanGift,
   type PlanOverride,
 } from "@/features/billing/subscription-status";
 import { isActiveEscalation, type AdvisorEscalationRecord } from "@/features/advisor/escalation-queue";
 import { bucketIndex, type ResolvedRange } from "@/features/platform/range";
-import { NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import type { AuthSession } from "@/types/auth";
 import { companyStatusFrom, type CompanyStatus } from "./user.repository";
@@ -46,6 +51,9 @@ export type WorkspaceRow = {
   plan: BillingPlan;
   planOverride: PlanOverride;
   planOverrideNote: string | null;
+  /** The latest gift, active or not. */
+  gift: PlanGift | null;
+  giftActive: boolean;
   /** Package the workspace subscribed to at checkout; null for free or older subscriptions. */
   packageId: string | null;
   payingViaStripe: boolean;
@@ -65,7 +73,8 @@ export type PlatformAuditEntry = {
   createdAtMs: number | null;
 };
 
-export type WorkspaceAction = "block" | "unblock" | "grant_paid" | "revoke_paid";
+/** grant_paid/revoke_paid are kept so older audit entries still read; new grants are gifts. */
+export type WorkspaceAction = "block" | "unblock" | "gift_access" | "end_gift" | "grant_paid" | "revoke_paid";
 export type UserAuditAction = "user_suspend" | "user_unsuspend" | "user_delete" | "user_restore" | "user_purge" | "platform_admin_grant" | "platform_admin_revoke";
 export type PlatformAction = WorkspaceAction | "delete" | "restore_workspace" | "purge" | PackageAuditAction | UserAuditAction;
 
@@ -158,6 +167,7 @@ export async function listWorkspaceRows(): Promise<WorkspaceRow[]> {
       const sub = billing.get(doc.id) ?? {};
       const billingStatus = normalizeBillingStatus(sub.status ?? "free");
       const planOverride: PlanOverride = sub.planOverride === "paid" ? "paid" : null;
+      const gift = planGiftFrom({ endsAtMs: ms(sub.giftEndsAt), messageLimit: sub.giftMessageLimit, messagesUsed: sub.giftMessagesUsed, note: sub.giftNote });
       const freeMessagesUsed = typeof sub.freeMessagesUsed === "number" ? Math.max(0, sub.freeMessagesUsed) : 0;
       return {
         id: doc.id,
@@ -177,9 +187,11 @@ export async function listWorkspaceRows(): Promise<WorkspaceRow[]> {
         conversationCount: conversationCount.get(doc.id) ?? 0,
         lastActivityMs: lastActivity.get(doc.id) ?? null,
         billingStatus,
-        plan: billingPlanForState(billingStatus, ms(sub.trialEndsAt), Date.now(), planOverride),
+        plan: billingPlanForState(billingStatus, ms(sub.trialEndsAt), Date.now(), planOverride, gift),
         planOverride,
         planOverrideNote: str(sub.planOverrideNote),
+        gift,
+        giftActive: isGiftActive(gift),
         packageId: str(sub.packageId),
         payingViaStripe: billingStatus === "active" || billingStatus === "past_due",
         freeMessagesUsed,
@@ -311,18 +323,33 @@ export async function listPlatformAudit({ companyId, limit = 100 }: { companyId?
   return entries.sort((a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0)).slice(0, limit);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** Applies a platform action and records who did it, in one transaction. */
 export async function applyPlatformAction({
   companyId,
   action,
   reason,
+  gift,
   actor,
+  nowMs = Date.now(),
 }: {
   companyId: string;
-  action: WorkspaceAction;
+  action: Exclude<WorkspaceAction, "grant_paid" | "revoke_paid">;
   reason: string | null;
+  /** Required for gift_access. */
+  gift?: { days: number; messages: number };
   actor: Pick<AuthSession, "uid" | "email">;
+  nowMs?: number;
 }) {
+  if (action === "gift_access") {
+    const valid =
+      gift &&
+      Number.isInteger(gift.days) && gift.days >= 1 && gift.days <= GIFT_MAX_DAYS &&
+      Number.isInteger(gift.messages) && gift.messages >= 1 && gift.messages <= GIFT_MAX_MESSAGES;
+    if (!valid) throw new ValidationError(`Gift between 1 and ${GIFT_MAX_DAYS} days and 1 and ${GIFT_MAX_MESSAGES} messages.`);
+  }
+
   const db = adminDb();
   const companyRef = db.collection(COMPANIES).doc(companyId);
   const subscriptionRef = db.collection(SUBSCRIPTIONS).doc(companyId);
@@ -347,19 +374,46 @@ export async function applyPlatformAction({
             },
         { merge: true },
       );
-    } else {
+    } else if (action === "gift_access") {
+      // A new gift replaces any earlier one and starts its message count from zero.
       transaction.set(
         subscriptionRef,
-        action === "grant_paid"
-          ? { companyId, planOverride: "paid", planOverrideNote: reason, planOverrideBy: actor.uid, planOverrideAt: now, updatedAt: now }
-          : {
-              companyId,
-              planOverride: FieldValue.delete(),
-              planOverrideNote: FieldValue.delete(),
-              planOverrideBy: FieldValue.delete(),
-              planOverrideAt: FieldValue.delete(),
-              updatedAt: now,
-            },
+        {
+          companyId,
+          giftEndsAt: Timestamp.fromMillis(nowMs + gift!.days * DAY_MS),
+          giftMessageLimit: gift!.messages,
+          giftMessagesUsed: 0,
+          giftNote: reason,
+          giftBy: actor.uid,
+          giftAt: now,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    } else {
+      const subscription = await transaction.get(subscriptionRef);
+      const current = planGiftFrom({
+        endsAtMs: ms(subscription.get("giftEndsAt")),
+        messageLimit: subscription.get("giftMessageLimit"),
+        messagesUsed: subscription.get("giftMessagesUsed"),
+        note: subscription.get("giftNote"),
+      });
+      if (!isGiftActive(current, nowMs) && subscription.get("planOverride") !== "paid") {
+        throw new ConflictError("This workspace has no active gift.");
+      }
+      // Ending now keeps the record of what was gifted; it also clears a permanent grant from before gifts existed.
+      transaction.set(
+        subscriptionRef,
+        {
+          companyId,
+          ...(current ? { giftEndsAt: Timestamp.fromMillis(Math.min(current.endsAtMs, nowMs)) } : {}),
+          giftEndedBy: actor.uid,
+          planOverride: FieldValue.delete(),
+          planOverrideNote: FieldValue.delete(),
+          planOverrideBy: FieldValue.delete(),
+          planOverrideAt: FieldValue.delete(),
+          updatedAt: now,
+        },
         { merge: true },
       );
     }
@@ -370,7 +424,7 @@ export async function applyPlatformAction({
       companyName: str(company.get("name")) ?? "Workspace",
       actorUid: actor.uid,
       actorEmail: actor.email,
-      reason,
+      reason: action === "gift_access" ? [`${gift!.days} days, ${gift!.messages} messages`, reason].filter(Boolean).join(". ") : reason,
       createdAt: now,
     });
   });

@@ -16,6 +16,7 @@ import { parseJsonBody } from "@/server/http/parse-json-body";
 import {
   releaseAdvisorMessage,
   reserveAdvisorMessage,
+  type AdvisorAllowance,
 } from "@/server/repositories/billing.repository";
 import {
   appendSkylarConversationTurn,
@@ -81,8 +82,8 @@ export async function POST(request: NextRequest) {
       windowMs: env.AI_RATE_LIMIT_WINDOW_MS,
     });
     // Free workspaces get FREE_MESSAGE_LIMIT advisor messages; throws a 402 once they're used up.
-    const allowance = env.DEMO_DISABLE_PAYMENT_GATE ? { reserved: false } : await reserveAdvisorMessage(session);
-    if (allowance.reserved) refund = () => releaseAdvisorMessage(session);
+    const allowance: AdvisorAllowance = env.DEMO_DISABLE_PAYMENT_GATE ? { reserved: false } : await reserveAdvisorMessage(session);
+    if (allowance.reserved) refund = () => releaseAdvisorMessage(session, allowance.counter);
     const isEmployee = session.role === "employee";
     const history = isEmployee ? [] : await listSkylarConversationMessages(session, input, MANAGER_HISTORY_MESSAGES);
     // Managers: the selected person's notes are loaded here, so the chat sees them wherever it was opened.

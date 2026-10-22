@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   billingPlanForState,
   FREE_MESSAGE_LIMIT,
+  giftDaysRemaining,
+  isGiftActive,
+  planGiftFrom,
   freeMessagesRemaining,
   normalizeBillingStatus,
 } from "@/features/billing/subscription-status";
@@ -53,5 +56,28 @@ describe("normalizeBillingStatus", () => {
     expect(normalizeBillingStatus("free")).toBe("free");
     expect(normalizeBillingStatus("active")).toBe("active");
     expect(normalizeBillingStatus("paused")).toBe("none");
+  });
+});
+
+describe("gifted access", () => {
+  const gift = { endsAtMs: 10_000, messageLimit: 3, messagesUsed: 1, note: null };
+
+  it("is paid while both days and messages remain, then falls back to the original plan", () => {
+    expect(billingPlanForState("free", null, 5_000, null, gift)).toBe("paid");
+    expect(billingPlanForState("free", null, 10_000, null, gift)).toBe("free");
+    expect(billingPlanForState("free", null, 5_000, null, { ...gift, messagesUsed: 3 })).toBe("free");
+    expect(billingPlanForState("active", null, 20_000, null, gift)).toBe("paid");
+  });
+
+  it("reads only complete gifts", () => {
+    expect(planGiftFrom({ endsAtMs: null, messageLimit: 3, messagesUsed: 0, note: null })).toBeNull();
+    expect(planGiftFrom({ endsAtMs: 1, messageLimit: "3", messagesUsed: 0, note: null })).toBeNull();
+    expect(planGiftFrom({ endsAtMs: 1, messageLimit: 3, messagesUsed: undefined, note: " " })).toEqual({ endsAtMs: 1, messageLimit: 3, messagesUsed: 0, note: null });
+    expect(isGiftActive(null)).toBe(false);
+  });
+
+  it("rounds days left up", () => {
+    expect(giftDaysRemaining({ ...gift, endsAtMs: 1 }, 0)).toBe(1);
+    expect(giftDaysRemaining({ ...gift, endsAtMs: 0 }, 5)).toBe(0);
   });
 });

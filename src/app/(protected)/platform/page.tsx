@@ -61,7 +61,7 @@ export default async function PlatformOverviewPage({
     const pkg = (row.packageId ? packageById.get(row.packageId) : null) ?? legacyPaid;
     return sum + (pkg ? monthlyEquivalentCents(pkg) : 0);
   }, 0);
-  const granted = rows.filter((row) => row.planOverride === "paid");
+  const granted = rows.filter((row) => row.planOverride === "paid" || (row.giftActive && !row.payingViaStripe));
   const paid = rows.filter((row) => row.plan === "paid");
   const users = rows.reduce((sum, row) => sum + row.userCount, 0);
   const admins = rows.reduce((sum, row) => sum + row.adminCount, 0);
@@ -102,7 +102,7 @@ export default async function PlatformOverviewPage({
             tone="accent"
             label="Paid workspaces"
             value={formatCount(paid.length)}
-            detail={`${formatCount(stripePaying.length)} via Stripe, ${formatCount(granted.length)} granted, ${formatPercent(paid.length, rows.length)} of all`}
+            detail={`${formatCount(stripePaying.length)} via Stripe, ${formatCount(granted.length)} gifted, ${formatPercent(paid.length, rows.length)} of all`}
           />
           <StatTile
             icon={CircleDollarSign}

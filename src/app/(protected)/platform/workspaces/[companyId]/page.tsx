@@ -8,6 +8,7 @@ import { WorkspaceActions } from "@/components/platform/workspace-actions";
 import { WorkspacePlanBadge, WorkspaceStatusBadge } from "@/components/platform/workspace-badges";
 import { PLATFORM_WORKSPACES_PATH } from "@/constants/routes";
 import { formatCount, formatDate, formatRelative } from "@/features/platform/format";
+import { giftDaysRemaining, giftMessagesRemaining } from "@/features/billing/subscription-status";
 import { daysUntilPurge } from "@/features/platform/lifecycle";
 import { getSession } from "@/server/auth/get-session";
 import { requirePlatformAdminPage } from "@/server/auth/platform-admin";
@@ -31,9 +32,12 @@ export default async function PlatformWorkspacePage({ params }: { params: { comp
   const row = rows.find((candidate) => candidate.id === params.companyId);
   if (!row) notFound();
 
+  const activeGift = row.giftActive && row.gift ? row.gift : null;
   const billingLabel = row.planOverride === "paid"
     ? "Paid access granted by Skylar"
-    : row.payingViaStripe
+    : activeGift
+      ? `Gifted by Skylar until ${formatDate(activeGift.endsAtMs)}`
+      : row.payingViaStripe
       ? `Stripe subscription (${row.billingStatus.replace("_", " ")})`
       : row.billingStatus === "canceled"
         ? "Stripe subscription canceled"
@@ -92,9 +96,17 @@ export default async function PlatformWorkspacePage({ params }: { params: { comp
               />
               <StatTile
                 icon={MessageSquare}
-                label="Free advisor messages"
-                value={row.plan === "paid" ? "Unlimited" : `${row.freeMessagesUsed} / ${freeLimit}`}
-                detail={row.plan === "paid" ? "Paid plan" : "used on the free plan"}
+                label={activeGift && !row.payingViaStripe && row.planOverride !== "paid" ? "Gifted advisor messages" : "Free advisor messages"}
+                value={
+                  activeGift && !row.payingViaStripe && row.planOverride !== "paid"
+                    ? `${activeGift.messagesUsed} / ${activeGift.messageLimit}`
+                    : row.plan === "paid" ? "Unlimited" : `${row.freeMessagesUsed} / ${freeLimit}`
+                }
+                detail={
+                  activeGift && !row.payingViaStripe && row.planOverride !== "paid"
+                    ? `used, ${giftDaysRemaining(activeGift)} days left`
+                    : row.plan === "paid" ? "Paid plan" : "used on the free plan"
+                }
               />
               <StatTile
                 icon={ShieldAlert}
@@ -136,7 +148,13 @@ export default async function PlatformWorkspacePage({ params }: { params: { comp
           </div>
 
           <div className="grid content-start gap-5">
-            <WorkspaceActions companyId={row.id} companyName={row.name} status={row.status} planOverride={row.planOverride} />
+            <WorkspaceActions
+              companyId={row.id}
+              companyName={row.name}
+              status={row.status}
+              planOverride={row.planOverride}
+              gift={activeGift ? { daysLeft: giftDaysRemaining(activeGift), messagesLeft: giftMessagesRemaining(activeGift) } : null}
+            />
 
             <div className="rounded-2xl bg-paper/[0.045] p-4 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.05)]">
               <p className="text-sm font-semibold text-paper">Billing</p>
@@ -144,6 +162,15 @@ export default async function PlatformWorkspacePage({ params }: { params: { comp
                 <div className="flex justify-between gap-3"><dt className="text-paper-3">Plan</dt><dd className="text-right text-paper">{billingLabel}</dd></div>
                 {row.planOverrideNote && (
                   <div className="flex justify-between gap-3"><dt className="text-paper-3">Grant note</dt><dd className="text-right text-paper-2">{row.planOverrideNote}</dd></div>
+                )}
+                {row.gift && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-paper-3">{activeGift ? "Gift" : "Last gift"}</dt>
+                    <dd className="text-right text-paper-2">
+                      {row.gift.messagesUsed} of {row.gift.messageLimit} messages, {activeGift ? "ends" : "ended"} {formatDate(activeGift ? row.gift.endsAtMs : Math.min(row.gift.endsAtMs, Date.now()))}
+                      {row.gift.note && <span className="block text-paper-3">{row.gift.note}</span>}
+                    </dd>
+                  </div>
                 )}
                 <div className="flex justify-between gap-3"><dt className="text-paper-3">Stripe status</dt><dd className="text-right capitalize text-paper-2">{row.billingStatus.replace("_", " ")}</dd></div>
               </dl>

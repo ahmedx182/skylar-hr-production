@@ -55,17 +55,40 @@ describe("POST /api/platform/workspaces/[companyId]", () => {
     expect(mocks.applyPlatformAction).not.toHaveBeenCalled();
   });
 
-  it("grants paid access without a note", async () => {
-    const response = await POST(post({ action: "grant_paid" }), params);
+  it("gifts access for a number of days and messages", async () => {
+    const response = await POST(post({ action: "gift_access", days: 14, messages: 50, reason: "Pilot" }), params);
 
     expect(response.status).toBe(200);
-    expect(mocks.applyPlatformAction).toHaveBeenCalledWith(expect.objectContaining({ action: "grant_paid", reason: null }));
+    expect(mocks.applyPlatformAction).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "gift_access", reason: "Pilot", gift: { days: 14, messages: 50 } }),
+    );
+  });
+
+  it("refuses a gift without sane days and messages", async () => {
+    for (const body of [
+      { action: "gift_access" },
+      { action: "gift_access", days: 0, messages: 10 },
+      { action: "gift_access", days: 10, messages: 0 },
+      { action: "gift_access", days: 1.5, messages: 10 },
+      { action: "gift_access", days: 400, messages: 10 },
+      { action: "grant_paid" },
+    ]) {
+      expect((await POST(post(body), params)).status).toBe(400);
+    }
+    expect(mocks.applyPlatformAction).not.toHaveBeenCalled();
+  });
+
+  it("ends a gift without a note", async () => {
+    const response = await POST(post({ action: "end_gift" }), params);
+
+    expect(response.status).toBe(200);
+    expect(mocks.applyPlatformAction).toHaveBeenCalledWith(expect.objectContaining({ action: "end_gift", reason: null, gift: undefined }));
   });
 
   it("forbids workspace admins who are not platform admins", async () => {
     mocks.requireSession.mockResolvedValue({ ...platformAdmin, isPlatformAdmin: false });
 
-    const response = await POST(post({ action: "grant_paid" }), params);
+    const response = await POST(post({ action: "end_gift" }), params);
 
     expect(response.status).toBe(403);
     expect(mocks.applyPlatformAction).not.toHaveBeenCalled();
@@ -79,7 +102,7 @@ describe("POST /api/platform/workspaces/[companyId]", () => {
   });
 
   it("rejects cross-origin requests", async () => {
-    const response = await POST(post({ action: "grant_paid" }, "https://evil.example"), params);
+    const response = await POST(post({ action: "end_gift" }, "https://evil.example"), params);
 
     expect(response.status).toBe(403);
     expect(mocks.applyPlatformAction).not.toHaveBeenCalled();

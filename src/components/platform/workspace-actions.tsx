@@ -4,10 +4,11 @@ import { Ban, Gift, RotateCcw, ShieldCheck, Trash2, Undo2, type LucideIcon } fro
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { PLATFORM_WORKSPACES_PATH } from "@/constants/routes";
+import { GIFT_MAX_DAYS, GIFT_MAX_MESSAGES } from "@/features/billing/subscription-status";
 import { DELETION_GRACE_DAYS } from "@/features/platform/lifecycle";
 import { cn } from "@/lib/utils/cn";
 
-type Action = "block" | "unblock" | "grant_paid" | "revoke_paid" | "delete" | "restore_workspace" | "purge";
+type Action = "block" | "unblock" | "gift_access" | "end_gift" | "delete" | "restore_workspace" | "purge";
 
 type ActionCopy = {
   title: string;
@@ -17,6 +18,8 @@ type ActionCopy = {
   reasonRequired: boolean;
   /** The admin must type the workspace name before this runs. */
   needsName?: boolean;
+  /** Asks how many days and messages to gift. */
+  needsGift?: boolean;
   danger?: boolean;
 };
 
@@ -35,17 +38,18 @@ const copy: Record<Action, ActionCopy> = {
     reasonLabel: "Note (optional)",
     reasonRequired: false,
   },
-  grant_paid: {
-    title: "Grant paid access?",
-    body: "The workspace gets unlimited advisor messages without a Stripe subscription. It won't be charged.",
-    confirm: "Grant paid access",
-    reasonLabel: "Note (optional, e.g. pilot customer until June)",
+  gift_access: {
+    title: "Gift paid access?",
+    body: "The workspace gets the paid plan free of charge. When the days run out or the messages are used up, whichever comes first, it goes back to its original plan.",
+    confirm: "Gift access",
+    reasonLabel: "Note (optional, e.g. pilot customer)",
     reasonRequired: false,
+    needsGift: true,
   },
-  revoke_paid: {
-    title: "Revoke granted access?",
-    body: "The workspace returns to its Stripe plan, or to Free if it has no subscription.",
-    confirm: "Revoke access",
+  end_gift: {
+    title: "End gifted access now?",
+    body: "The workspace goes back to its original plan straight away: its Stripe subscription, or Free if it has none.",
+    confirm: "End gift",
     reasonLabel: "Note (optional)",
     reasonRequired: false,
   },
@@ -119,16 +123,21 @@ export function WorkspaceActions({
   companyName,
   status,
   planOverride,
+  gift,
 }: {
   companyId: string;
   companyName: string;
   status: "active" | "blocked" | "deleted";
   planOverride: "paid" | null;
+  /** The active gift, or null when there isn't one. */
+  gift: { daysLeft: number; messagesLeft: number } | null;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState<Action | null>(null);
   const [reason, setReason] = useState("");
   const [typedName, setTypedName] = useState("");
+  const [giftDays, setGiftDays] = useState("30");
+  const [giftMessages, setGiftMessages] = useState("100");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
@@ -137,6 +146,8 @@ export function WorkspaceActions({
     setPending(action);
     setReason("");
     setTypedName("");
+    setGiftDays("30");
+    setGiftMessages("100");
     setError("");
   }
 
@@ -151,6 +162,18 @@ export function WorkspaceActions({
       setError("Type the workspace name exactly to confirm.");
       return;
     }
+    const days = Number(giftDays);
+    const messages = Number(giftMessages);
+    if (details.needsGift) {
+      if (!Number.isInteger(days) || days < 1 || days > GIFT_MAX_DAYS) {
+        setError(`Gift between 1 and ${GIFT_MAX_DAYS} days.`);
+        return;
+      }
+      if (!Number.isInteger(messages) || messages < 1 || messages > GIFT_MAX_MESSAGES) {
+        setError(`Gift between 1 and ${GIFT_MAX_MESSAGES.toLocaleString()} messages.`);
+        return;
+      }
+    }
     setIsSubmitting(true);
     setError("");
     try {
@@ -161,6 +184,7 @@ export function WorkspaceActions({
           action: pending,
           reason: reason.trim() || undefined,
           confirmName: details.needsName ? typedName.trim() : undefined,
+          ...(details.needsGift ? { days, messages } : {}),
         }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -233,27 +257,31 @@ export function WorkspaceActions({
                 onClick={() => open("unblock")}
               />
             )}
-            {planOverride === "paid" ? (
+            {gift || planOverride === "paid" ? (
               <ActionRow
                 icon={RotateCcw}
-                iconTone="bg-paper/[0.08] text-paper-2"
-                title="Paid access granted"
-                description="Unlimited messages, no charge."
-                label="Revoke"
+                iconTone="bg-sun/15 text-sun"
+                title="Gifted access"
+                description={
+                  gift
+                    ? `${gift.messagesLeft.toLocaleString()} ${gift.messagesLeft === 1 ? "message" : "messages"} and ${gift.daysLeft} ${gift.daysLeft === 1 ? "day" : "days"} left.`
+                    : "Granted before gifts had limits. No end date."
+                }
+                label="End"
                 buttonClass="bg-paper/[0.08] text-paper hover:bg-paper hover:text-ink"
                 disabled={busy}
-                onClick={() => open("revoke_paid")}
+                onClick={() => open("end_gift")}
               />
             ) : (
               <ActionRow
                 icon={Gift}
                 iconTone="bg-sun/15 text-sun"
-                title="Grant paid access"
-                description="Unlimited messages without a subscription."
-                label="Grant"
+                title="Gift paid access"
+                description="Free paid plan for a set number of days and messages."
+                label="Gift"
                 buttonClass="bg-sun/15 text-sun hover:bg-sun hover:text-ink"
                 disabled={busy}
-                onClick={() => open("grant_paid")}
+                onClick={() => open("gift_access")}
               />
             )}
             <ActionRow
@@ -276,6 +304,35 @@ export function WorkspaceActions({
           <p className="mt-1 text-sm leading-6 text-paper-2">
             <span className="font-semibold text-paper">{companyName}</span>: {copy[pending].body}
           </p>
+          {copy[pending].needsGift && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="grid gap-1.5 text-xs font-semibold text-paper-3">
+                Days
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={GIFT_MAX_DAYS}
+                  value={giftDays}
+                  onChange={(event) => setGiftDays(event.target.value)}
+                  autoFocus
+                  className="h-10 rounded-lg border border-paper/10 bg-ink px-3 text-sm font-normal text-paper outline-none focus:border-paper/30"
+                />
+              </label>
+              <label className="grid gap-1.5 text-xs font-semibold text-paper-3">
+                Advisor messages
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={GIFT_MAX_MESSAGES}
+                  value={giftMessages}
+                  onChange={(event) => setGiftMessages(event.target.value)}
+                  className="h-10 rounded-lg border border-paper/10 bg-ink px-3 text-sm font-normal text-paper outline-none focus:border-paper/30"
+                />
+              </label>
+            </div>
+          )}
           {copy[pending].reasonLabel && (
             <label className="mt-3 grid gap-1.5 text-xs font-semibold text-paper-3">
               {copy[pending].reasonLabel}
@@ -284,7 +341,7 @@ export function WorkspaceActions({
                 onChange={(event) => setReason(event.target.value)}
                 maxLength={500}
                 rows={2}
-                autoFocus
+                autoFocus={!copy[pending].needsGift}
                 className="rounded-lg border border-paper/10 bg-ink px-3 py-2 text-sm font-normal text-paper outline-none placeholder:text-paper-3 focus:border-paper/30"
               />
             </label>

@@ -5,7 +5,9 @@ import {
   billingPlanForState,
   freeMessagesRemaining,
   FREE_MESSAGE_LIMIT,
+  isGiftActive,
   normalizeBillingStatus,
+  planGiftFrom,
   type BillingStatus,
   type CompanyBillingState,
 } from "@/features/billing/subscription-status";
@@ -37,12 +39,21 @@ function stateFromData(companyId: string, data: DocumentData, freeMessageLimit =
   const freeMessagesUsed =
     typeof data.freeMessagesUsed === "number" && data.freeMessagesUsed > 0 ? data.freeMessagesUsed : 0;
   const planOverride = data.planOverride === "paid" ? "paid" : null;
+  const gift = planGiftFrom({
+    endsAtMs: timestampMs(data.giftEndsAt),
+    messageLimit: data.giftMessageLimit,
+    messagesUsed: data.giftMessagesUsed,
+    note: data.giftNote,
+  });
+  const nowMs = Date.now();
   return {
     companyId,
     status,
-    plan: billingPlanForState(status, trialEndsAtMs, Date.now(), planOverride),
+    plan: billingPlanForState(status, trialEndsAtMs, nowMs, planOverride, gift),
     planOverride,
     planOverrideNote: typeof data.planOverrideNote === "string" ? data.planOverrideNote : null,
+    gift,
+    giftActive: isGiftActive(gift, nowMs),
     freeMessagesUsed,
     freeMessageLimit,
     freeMessagesRemaining: freeMessagesRemaining(freeMessagesUsed, freeMessageLimit),
@@ -203,14 +214,18 @@ export async function saveCheckoutSessionForCompany(
     );
 }
 
+/** Which allowance a reserved message was counted against, so a refund goes back to the same one. */
+export type AdvisorAllowance = { reserved: false } | { reserved: true; counter: "free" | "gift" };
+
 /**
- * Counts one advisor message against the workspace's free allowance. Paid workspaces pass
- * through untouched; a free workspace past the Free package's allowance is refused with a 402.
- * The counter is bumped inside a transaction so concurrent sends can't overshoot the limit.
+ * Counts one advisor message. Paying (or permanently granted) workspaces pass through untouched.
+ * An active gift is used next; once it runs out of days or messages the workspace is back on its
+ * original plan, so a free workspace counts against its free allowance and gets a 402 past it.
+ * Counters are bumped inside a transaction so concurrent sends can't overshoot a limit.
  */
 export async function reserveAdvisorMessage(
   session: Pick<AuthSession, "companyId">,
-): Promise<{ reserved: boolean }> {
+): Promise<AdvisorAllowance> {
   const db = adminDb();
   const subscriptionRef = db.collection(SUBSCRIPTIONS_COLLECTION).doc(session.companyId);
 
@@ -222,7 +237,18 @@ export async function reserveAdvisorMessage(
     const limit = typeof configuredLimit === "number" ? configuredLimit : FREE_MESSAGE_LIMIT;
     const data = snapshot.exists ? (snapshot.data() ?? {}) : {};
     const state = stateFromData(session.companyId, snapshot.exists ? data : { status: "free" }, limit);
-    if (state.plan === "paid") return { reserved: false };
+    const paidWithoutGift =
+      billingPlanForState(state.status, state.trialEndsAtMs, Date.now(), state.planOverride) === "paid";
+    if (paidWithoutGift) return { reserved: false };
+
+    if (state.giftActive) {
+      transaction.set(
+        subscriptionRef,
+        { giftMessagesUsed: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      );
+      return { reserved: true, counter: "gift" };
+    }
 
     if (state.freeMessagesUsed >= limit) {
       throw new PaymentRequiredError(
@@ -240,14 +266,17 @@ export async function reserveAdvisorMessage(
       },
       { merge: true },
     );
-    return { reserved: true };
+    return { reserved: true, counter: "free" };
   });
 }
 
-/** Gives back a free message that was reserved but never answered. */
-export async function releaseAdvisorMessage(session: Pick<AuthSession, "companyId">): Promise<void> {
+/** Gives back a message that was reserved but never answered, to the allowance it came from. */
+export async function releaseAdvisorMessage(
+  session: Pick<AuthSession, "companyId">,
+  counter: "free" | "gift" = "free",
+): Promise<void> {
   await adminDb()
     .collection(SUBSCRIPTIONS_COLLECTION)
     .doc(session.companyId)
-    .set({ freeMessagesUsed: FieldValue.increment(-1) }, { merge: true });
+    .set({ [counter === "gift" ? "giftMessagesUsed" : "freeMessagesUsed"]: FieldValue.increment(-1) }, { merge: true });
 }

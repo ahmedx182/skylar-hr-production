@@ -23,7 +23,7 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
 const planFilters: { value: PlanFilter; label: string }[] = [
   { value: "all", label: "Any plan" },
   { value: "paid", label: "Paid" },
-  { value: "granted", label: "Granted" },
+  { value: "granted", label: "Gifted" },
   { value: "free", label: "Free" },
 ];
 
@@ -78,7 +78,7 @@ export function WorkspacesTable({ rows }: { rows: WorkspaceRow[] }) {
       .filter((row) => (status === "all" ? row.status !== "deleted" : row.status === status))
       .filter((row) => {
         if (plan === "all") return true;
-        if (plan === "granted") return row.planOverride === "paid";
+        if (plan === "granted") return row.planOverride === "paid" || row.giftActive;
         if (plan === "paid") return row.plan === "paid";
         return row.plan === "free";
       })

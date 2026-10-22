@@ -23,12 +23,12 @@ export function WorkspaceStatusBadge({ status }: { status: WorkspaceRow["status"
   );
 }
 
-export function WorkspacePlanBadge({ row }: { row: Pick<WorkspaceRow, "planOverride" | "payingViaStripe" | "plan"> }) {
-  if (row.planOverride === "paid") {
+export function WorkspacePlanBadge({ row }: { row: Pick<WorkspaceRow, "planOverride" | "giftActive" | "payingViaStripe" | "plan"> }) {
+  if (row.planOverride === "paid" || (row.giftActive && !row.payingViaStripe)) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-sun/15 px-2 py-0.5 text-[11px] font-semibold text-sun">
         <Gift className="size-3" aria-hidden="true" />
-        Granted
+        {row.planOverride === "paid" ? "Granted" : "Gift"}
       </span>
     );
   }

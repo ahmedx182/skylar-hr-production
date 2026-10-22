@@ -105,9 +105,9 @@ describe("workspace lifecycle actions", () => {
   });
 
   it("still routes ordinary actions to the existing handler", async () => {
-    await POST(post({ action: "grant_paid" }), params);
+    await POST(post({ action: "end_gift" }), params);
 
-    expect(mocks.applyPlatformAction).toHaveBeenCalledWith(expect.objectContaining({ companyId: "acme", action: "grant_paid" }));
+    expect(mocks.applyPlatformAction).toHaveBeenCalledWith(expect.objectContaining({ companyId: "acme", action: "end_gift" }));
   });
 });
 

@@ -58,7 +58,7 @@ describe("reserveAdvisorMessage", () => {
 
   it("lets a brand-new workspace send five messages, then asks for payment", async () => {
     for (let sent = 1; sent <= 5; sent += 1) {
-      await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true });
+      await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "free" });
       expect(store.get("acme")?.freeMessagesUsed).toBe(sent);
     }
 
@@ -93,5 +93,56 @@ describe("reserveAdvisorMessage", () => {
     await releaseAdvisorMessage(session);
 
     expect(store.get("acme")?.freeMessagesUsed).toBe(0);
+  });
+});
+
+describe("gifted access", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const gift = (overrides: Doc = {}) => ({
+    status: "free",
+    freeMessagesUsed: 5,
+    giftEndsAt: { toMillis: () => Date.now() + 3 * DAY },
+    giftMessageLimit: 2,
+    giftMessagesUsed: 0,
+    ...overrides,
+  });
+
+  beforeEach(() => store.clear());
+
+  it("lets an out-of-allowance free workspace chat on the gift, counting gift messages only", async () => {
+    store.set("acme", gift());
+
+    await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "gift" });
+    await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "gift" });
+    expect(store.get("acme")).toMatchObject({ giftMessagesUsed: 2, freeMessagesUsed: 5 });
+  });
+
+  it("goes back to the original free plan once the gifted messages are used", async () => {
+    store.set("acme", gift({ giftMessagesUsed: 2 }));
+
+    await expect(reserveAdvisorMessage(session)).rejects.toBeInstanceOf(PaymentRequiredError);
+  });
+
+  it("goes back to the original plan once the gifted days run out, with its free allowance intact", async () => {
+    store.set("acme", gift({ freeMessagesUsed: 3, giftEndsAt: { toMillis: () => Date.now() - 1 } }));
+
+    await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "free" });
+    expect(store.get("acme")).toMatchObject({ freeMessagesUsed: 4, giftMessagesUsed: 0 });
+  });
+
+  it("doesn't spend a gift while a Stripe subscription already pays", async () => {
+    store.set("acme", gift({ status: "active" }));
+
+    await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: false });
+    expect(store.get("acme")?.giftMessagesUsed).toBe(0);
+  });
+
+  it("refunds an unanswered gift message to the gift", async () => {
+    store.set("acme", gift());
+
+    const allowance = await reserveAdvisorMessage(session);
+    await releaseAdvisorMessage(session, allowance.reserved ? allowance.counter : undefined);
+
+    expect(store.get("acme")).toMatchObject({ giftMessagesUsed: 0, freeMessagesUsed: 5 });
   });
 });

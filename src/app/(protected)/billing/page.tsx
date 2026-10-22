@@ -3,7 +3,12 @@ import { CheckCircle2, CreditCard, MessageSquare, ShieldAlert, type LucideIcon }
 import { BillingActions } from "@/components/billing/billing-actions";
 import { BillingReturnNotice, parseBillingReturn } from "@/components/billing/billing-return-notice";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
-import { type BillingStatus, type CompanyBillingState } from "@/features/billing/subscription-status";
+import {
+  giftDaysRemaining,
+  giftMessagesRemaining,
+  type BillingStatus,
+  type CompanyBillingState,
+} from "@/features/billing/subscription-status";
 import { formatPackagePrice, isPurchasable } from "@/features/pricing/package";
 import { getServerEnv } from "@/lib/env/server";
 import { requirePageSession } from "@/server/auth/require-session";
@@ -29,6 +34,14 @@ export default async function BillingPage({
     return { id: pkg.id, name: pkg.name, priceLabel: `${price.amount} ${price.period}` };
   });
   const stripeReady = Boolean(env.STRIPE_SECRET_KEY) && plans.length > 0;
+  // A gift only matters while nothing else already makes the workspace paid.
+  const gift =
+    billing.giftActive && billing.gift && billing.planOverride !== "paid" && billing.status !== "active" && billing.status !== "past_due"
+      ? billing.gift
+      : null;
+  const giftEnds = gift
+    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(gift.endsAtMs)
+    : null;
 
   return (
     <BriefingRoomFrame session={session} active="Billing">
@@ -57,13 +70,15 @@ export default async function BillingPage({
               <BillingMetric
                 icon={CreditCard}
                 label="Status"
-                value={billing.planOverride === "paid" ? "Granted" : statusLabel(billing.status)}
+                value={billing.planOverride === "paid" ? "Granted" : gift ? "Gift" : statusLabel(billing.status)}
               />
               <BillingMetric
                 icon={MessageSquare}
                 label="Advisor messages"
                 value={
-                  billing.plan === "paid"
+                  gift
+                    ? `${giftMessagesRemaining(gift)} of ${gift.messageLimit} left`
+                    : billing.plan === "paid"
                     ? "Unlimited"
                     : `${billing.freeMessagesRemaining} of ${billing.freeMessageLimit} left`
                 }
@@ -82,6 +97,18 @@ export default async function BillingPage({
                   Skylar has granted this workspace paid access, so there&apos;s nothing to pay. Advisor messages are
                   unlimited.
                 </p>
+              ) : gift ? (
+                <div className="mt-3 grid gap-3">
+                  <p className="text-sm leading-6 text-paper-2">
+                    Skylar has gifted this workspace the paid plan until {giftEnds} ({giftDaysRemaining(gift)}{" "}
+                    {giftDaysRemaining(gift) === 1 ? "day" : "days"} left) or {giftMessagesRemaining(gift)} more advisor{" "}
+                    {giftMessagesRemaining(gift) === 1 ? "message" : "messages"}, whichever comes first. After that it goes
+                    back to the free plan unless you subscribe.
+                  </p>
+                  {stripeReady && !paymentGateDisabled && (
+                    <BillingActions hasCustomer={Boolean(billing.stripeCustomerId)} plans={plans} />
+                  )}
+                </div>
               ) : paymentGateDisabled ? (
                 <p className="mt-3 text-sm leading-6 text-paper-2">
                   Payment is disabled for the client demo. The core app remains accessible while
@@ -131,7 +158,7 @@ function BillingBadge({ billing }: { billing: CompanyBillingState }) {
   const exhausted = !isPaid && billing.freeMessagesRemaining === 0;
   return (
     <div className={`w-fit rounded-full px-4 py-2 text-sm font-semibold ${exhausted ? "bg-risk/15 text-risk" : "bg-success/15 text-success"}`}>
-      {isPaid ? "Paid plan" : exhausted ? "Upgrade required" : "Free plan"}
+      {isPaid ? (billing.giftActive && billing.status !== "active" && billing.status !== "past_due" && billing.planOverride !== "paid" ? "Gifted paid plan" : "Paid plan") : exhausted ? "Upgrade required" : "Free plan"}
     </div>
   );
 }
