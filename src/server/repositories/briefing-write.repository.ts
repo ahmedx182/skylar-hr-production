@@ -16,8 +16,6 @@ import type {
 } from "@/schemas/briefing-write.schema";
 import type { AuthSession } from "@/types/auth";
 
-import { assertWorkspaceEmailAllowed } from "@/server/auth/workspace-domain";
-
 const EMPLOYEES_COLLECTION = "employees";
 const LEDGER_COLLECTION = "employee_ledger_entries";
 const USERS_COLLECTION = "users";
@@ -86,7 +84,6 @@ export async function createEmployeeRecord(
 ): Promise<{ id: string; employeeCode: string }> {
   const now = FieldValue.serverTimestamp();
   const db = adminDb();
-  await assertWorkspaceEmailAllowed(session.companyId, input.email);
   await assertUniqueEmployeeEmail(session.companyId, input.email);
   const ref = db.collection(EMPLOYEES_COLLECTION).doc();
   const userId = await workspaceUserIdForEmail(input.email, input.name);
@@ -130,7 +127,6 @@ function assertUserWorkspace(user: Record<string, unknown> | undefined, companyI
 }
 
 async function upsertWorkspaceUser(session: AuthSession, email: string, displayName: string) {
-  await assertWorkspaceEmailAllowed(session.companyId, email);
   const userId = await workspaceUserIdForEmail(email, displayName);
   const db = adminDb();
   const userRef = db.collection(USERS_COLLECTION).doc(userId);
@@ -185,7 +181,6 @@ export async function updateEmployeeRecord(
     throw new NotFoundError("Employee not found.");
   }
   if (input.email) {
-    await assertWorkspaceEmailAllowed(session.companyId, input.email);
     await assertUniqueEmployeeEmail(session.companyId, input.email, input.employeeId);
     await upsertWorkspaceUser(session, input.email, input.name);
   }

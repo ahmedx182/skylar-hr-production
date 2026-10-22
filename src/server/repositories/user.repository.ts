@@ -6,8 +6,6 @@ import { adminDb } from "@/lib/firebase/admin";
 import { appUserSchema, type AccountSettingsInput } from "@/schemas/auth.schema";
 import { AuthorizationError, NotFoundError } from "@/lib/errors";
 import type { AppUser, AuthSession } from "@/types/auth";
-import { emailDomain } from "@/schemas/workspace-domain.schema";
-import { assertWorkspaceEmailAllowed } from "@/server/auth/workspace-domain";
 
 const COMPANIES_COLLECTION = "companies";
 const USERS_COLLECTION = "users";
@@ -116,7 +114,6 @@ export async function provisionSignupWorkspace({
       return existing;
     }
     transaction.set(companyRef, {
-      allowedEmailDomains: [emailDomain(email)],
       name: companyName,
       subscriptionStatus: "free",
       createdAt: now,
@@ -149,7 +146,6 @@ export async function provisionInvitedUser({
   role: "admin" | "employee";
   linkedEmployeeId: string | null;
 }): Promise<AppUser> {
-  await assertWorkspaceEmailAllowed(companyId, email);
   const db = adminDb();
   const userRef = db.collection(USERS_COLLECTION).doc(uid);
   const displayName = email.split("@")[0] || "Team member";
@@ -250,7 +246,6 @@ export async function updateAccountSettings(
       companyRef,
       {
         name: input.companyName,
-        ...(input.allowedEmailDomains !== undefined ? { allowedEmailDomains: input.allowedEmailDomains } : {}),
         updatedAt: now,
       },
       { merge: true },

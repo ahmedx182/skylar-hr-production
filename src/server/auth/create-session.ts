@@ -17,7 +17,6 @@ import {
 import { isFirebaseAuthError } from "./firebase-auth-error";
 import { isPlatformAdminEmail } from "./platform-admin-email";
 import { WORKSPACE_DELETED_MESSAGE, WORKSPACE_SUSPENDED_MESSAGE } from "@/constants/auth";
-import { assertWorkspaceEmailAllowed } from "./workspace-domain";
 
 /** Only a sign-in this recent may be exchanged, so a stolen older ID token is useless (Firebase guidance). */
 const MAX_SIGN_IN_AGE_SECONDS = 5 * 60;
@@ -64,7 +63,6 @@ export async function createSession(
   const user = await findUserById(decoded.uid);
   const accountBlock = user ? accountBlockStateOf(user) : null;
   if (accountBlock) throw new AccountBlockedError(accountBlock);
-  if (user?.role === "employee") await assertWorkspaceEmailAllowed(user.companyId, email);
   if (user) await assertWorkspaceActive(user.companyId, email);
   if (!user) {
     if (signup) {

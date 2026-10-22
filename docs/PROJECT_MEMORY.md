@@ -42,10 +42,11 @@ confirmed.
 ## Implemented Now
 
 - Passwordless Firebase email-link authentication.
-- Owner workspace signup at `/signup`, seeding `allowedEmailDomains` per company
-  in Firestore (replaces the old static `SIGNUP_ALLOWED_DOMAINS` env var).
+- Owner workspace signup at `/signup`, open to any verified email. There is no
+  email-domain restriction (the old `SIGNUP_ALLOWED_DOMAINS` env var and the
+  per-workspace `allowedEmailDomains` allowlist are both gone).
 - Admin team invite flow in Settings → Team: send/cancel invites, role
-  management, per-workspace domain allowlist editing in Settings → Profile.
+  management.
 - Active-user allowlist before requesting sign-in links.
 - Secure server session cookies and protected server-rendered routes.
 - Server-side role and company authorization.
@@ -101,7 +102,7 @@ confirmed.
 
 | Route | Current purpose |
 | --- | --- |
-| `/login` | Passwordless email sign-in and approved-domain signup |
+| `/login` | Passwordless email sign-in and open workspace signup |
 | `/verify` | Completes the Firebase email link |
 | `/briefing` | Ordered Daily Briefing deck |
 | `/onboarding` | Live-in-5 first-run flow |

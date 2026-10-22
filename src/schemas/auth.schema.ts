@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { ROLES } from "@/constants/auth";
-import { workspaceDomainsSchema } from "./workspace-domain.schema";
 
 /** Firebase ID tokens are about 1 KB; the cap only rejects abuse. */
 const MAX_ID_TOKEN_LENGTH = 4096;
@@ -27,7 +26,6 @@ export const signupSchema = loginSchema.extend({
 });
 
 export const accountSettingsSchema = z.object({
-  allowedEmailDomains: workspaceDomainsSchema.optional(),
   displayName: z.string().trim().max(80, "Keep your name under 80 characters.").optional(),
   companyName: z.string().trim().min(2, "Enter your company name.").max(120),
 });

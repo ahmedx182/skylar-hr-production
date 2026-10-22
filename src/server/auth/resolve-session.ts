@@ -5,8 +5,6 @@ import { findCompanySummaryById, findEmployeeIdByEmail, findUserById } from "@/s
 import type { AuthSession } from "@/types/auth";
 import { isFirebaseAuthError } from "./firebase-auth-error";
 import { isPlatformAdminEmail } from "./platform-admin-email";
-import { assertWorkspaceEmailAllowed } from "./workspace-domain";
-import { AuthorizationError } from "@/lib/errors";
 
 /**
  * Turns a session cookie into a session, or null for anything that is not a
@@ -26,14 +24,6 @@ export async function resolveSession(cookie: string | undefined): Promise<AuthSe
 
   const user = await findUserById(claims.uid);
   if (!user || user.status !== "active") return null;
-  if (user.role === "employee") {
-    try {
-      await assertWorkspaceEmailAllowed(user.companyId, user.email);
-    } catch (error) {
-      if (error instanceof AuthorizationError) return null;
-      throw error;
-    }
-  }
   const company = await findCompanySummaryById(user.companyId);
   // Employees created before account linking existed: match their file by work email.
   const linkedEmployeeId =

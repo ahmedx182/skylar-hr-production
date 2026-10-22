@@ -7,6 +7,7 @@ import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { VERIFY_PATH } from "@/constants/routes";
+import { normalizeAppUrl } from "@/lib/app-url";
 import { saveMagicEmail, savePendingSignup } from "@/features/auth/magic-email";
 import { AccountBlockedClientError } from "@/features/auth/account-block";
 import { sendSignInLink } from "@/features/auth/send-sign-in-link";
@@ -30,9 +31,8 @@ export function SignupForm() {
         const result = await response.json();
         throw new Error(result.error?.message || "Could not check workspace signup. Try again.");
       }
-      const url = new URL(VERIFY_PATH, process.env.NEXT_PUBLIC_APP_URL || window.location.origin);
+      const url = new URL(VERIFY_PATH, normalizeAppUrl(process.env.NEXT_PUBLIC_APP_URL) ?? window.location.origin);
       // Carry setup through the email link even when opened on another device.
-      // The server checks the verified email's domain again before provisioning.
       url.searchParams.set("companyName", input.companyName);
       await sendSignInLink({ purpose: "signup", email: input.email, companyName: input.companyName }, url.toString());
       saveMagicEmail(input.email);

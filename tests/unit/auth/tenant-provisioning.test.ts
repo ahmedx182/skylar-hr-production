@@ -3,10 +3,9 @@ import type { AuthSession } from "@/types/auth";
 
 const mocks = vi.hoisted(() => ({
   collection: vi.fn(), runTransaction: vi.fn(), transactionGet: vi.fn(), set: vi.fn(), batch: vi.fn(), commit: vi.fn(),
-  getUserByEmail: vi.fn(), assertWorkspaceEmailAllowed: vi.fn(), delete: vi.fn(),
+  getUserByEmail: vi.fn(), delete: vi.fn(),
 }));
 vi.mock("@/lib/firebase/admin", () => ({ adminDb: () => mocks, adminAuth: () => mocks }));
-vi.mock("@/server/auth/workspace-domain", () => ({ assertWorkspaceEmailAllowed: mocks.assertWorkspaceEmailAllowed }));
 
 import { provisionSignupWorkspace, provisionInvitedUser, updateAccountSettings } from "@/server/repositories/user.repository";
 import { cancelInvite, createInvite } from "@/server/repositories/invite.repository";
@@ -35,10 +34,11 @@ describe("tenant account provisioning", () => {
     mocks.batch.mockReturnValue({ set: mocks.set, commit: mocks.commit });
   });
 
-  it("starts a new workspace with its verified owner's domain", async () => {
+  it("starts a new workspace without an email-domain restriction", async () => {
     const user = await provisionSignupWorkspace({ uid: "owner", email: "owner@acme.com", companyName: "Acme" });
     expect(user.role).toBe("admin");
-    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ collection: "companies" }), expect.objectContaining({ allowedEmailDomains: ["acme.com"], createdBy: "owner" }));
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ collection: "companies" }), expect.objectContaining({ createdBy: "owner" }));
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ collection: "companies" }), expect.not.objectContaining({ allowedEmailDomains: expect.anything() }));
   });
 
   it("refuses to overwrite an existing account through invitation acceptance", async () => {
@@ -47,21 +47,9 @@ describe("tenant account provisioning", () => {
     expect(mocks.set).not.toHaveBeenCalled();
   });
 
-  it("checks the invited tenant's domain policy", async () => {
-    await provisionInvitedUser({ uid: "employee-uid", email: "employee@acme.com", companyId: "tenant-a", role: "employee", linkedEmployeeId: null });
-    expect(mocks.assertWorkspaceEmailAllowed).toHaveBeenCalledWith("tenant-a", "employee@acme.com");
-  });
-
   it("refuses to move another tenant's account when adding an employee", async () => {
     mocks.transactionGet.mockResolvedValue(snapshot("employee-uid", { companyId: "tenant-b", status: "active" }));
     await expect(createEmployeeRecord(session, { name: "Employee", email: "employee@acme.com" })).rejects.toThrow("another workspace");
-    expect(mocks.set).not.toHaveBeenCalled();
-  });
-
-  it("checks domains before creating employee accounts or records", async () => {
-    mocks.assertWorkspaceEmailAllowed.mockRejectedValue(new Error("Domain denied"));
-    await expect(createEmployeeRecord(session, { name: "Employee", email: "employee@blocked.com" })).rejects.toThrow("Domain denied");
-    expect(mocks.getUserByEmail).not.toHaveBeenCalled();
     expect(mocks.set).not.toHaveBeenCalled();
   });
 
@@ -72,20 +60,14 @@ describe("tenant account provisioning", () => {
     expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ collection: "users" }), expect.objectContaining({ companyId: "tenant-a", role: "employee" }), { merge: true });
   });
 
-  it("saves domain changes only to the admin's workspace", async () => {
-    await updateAccountSettings(session, { companyName: "Acme", allowedEmailDomains: ["acme.com", "subsidiary.com"] });
-    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ collection: "companies", id: "tenant-a" }), expect.objectContaining({ allowedEmailDomains: ["acme.com", "subsidiary.com"] }), { merge: true });
+  it("saves workspace changes only to the admin's workspace", async () => {
+    await updateAccountSettings(session, { companyName: "Acme Ltd" });
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ collection: "companies", id: "tenant-a" }), expect.objectContaining({ name: "Acme Ltd" }), { merge: true });
   });
 
-  it("does not let employees change workspace domains", async () => {
-    await updateAccountSettings({ ...session, role: "employee" }, { companyName: "Acme", allowedEmailDomains: [] });
+  it("does not let employees change workspace settings", async () => {
+    await updateAccountSettings({ ...session, role: "employee" }, { companyName: "Acme" });
     expect(mocks.set.mock.calls.some(([ref]) => ref.collection === "companies")).toBe(false);
-  });
-
-  it("rejects invites outside the workspace domain before writing them", async () => {
-    mocks.assertWorkspaceEmailAllowed.mockRejectedValue(new Error("Domain denied"));
-    await expect(createInvite(session, "person@other.com", "employee", null)).rejects.toThrow("Domain denied");
-    expect(mocks.set).not.toHaveBeenCalled();
   });
 
   it("rejects another tenant's employee link on invitations", async () => {

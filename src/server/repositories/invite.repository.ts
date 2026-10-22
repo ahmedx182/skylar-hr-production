@@ -4,7 +4,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { AuthorizationError, ConflictError, NotFoundError } from "@/lib/errors";
 import { adminDb } from "@/lib/firebase/admin";
 import type { AuthSession } from "@/types/auth";
-import { assertWorkspaceEmailAllowed } from "@/server/auth/workspace-domain";
 
 const INVITES_COLLECTION = "invites";
 const USERS_COLLECTION = "users";
@@ -46,7 +45,6 @@ export async function createInvite(
 
   const db = adminDb();
   const normalizedEmail = email.trim().toLowerCase();
-  await assertWorkspaceEmailAllowed(session.companyId, normalizedEmail);
   if (linkedEmployeeId) {
     const employee = await db.collection("employees").doc(linkedEmployeeId).get();
     if (!employee.exists || employee.get("companyId") !== session.companyId || isSoftDeleted(employee)) throw new AuthorizationError("Employee is not in your workspace.");

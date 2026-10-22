@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { normalizeAppUrl } from "@/lib/app-url";
 import { parseEnv } from "./parse-env";
 
 const optionalPositiveInt = (fallback: number) =>
@@ -24,7 +25,11 @@ const optionalBoolean = z.preprocess(
 );
 
 const serverEnvSchema = z.object({
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  // A bare host or stray quotes are repaired; unset falls back to Vercel's production domain, then localhost.
+  NEXT_PUBLIC_APP_URL: z.preprocess(
+    (value) => normalizeAppUrl(value) ?? normalizeAppUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+    z.string().url().default("http://localhost:3000"),
+  ),
   FIREBASE_PROJECT_ID: z.string().min(1),
   FIREBASE_CLIENT_EMAIL: z.string().min(1),
   // Env files store the PEM with literal "\n" escapes.

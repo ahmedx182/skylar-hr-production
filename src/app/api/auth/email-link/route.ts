@@ -6,7 +6,6 @@ import { AccountBlockedError, AuthorizationError } from "@/lib/errors";
 import { adminAuth } from "@/lib/firebase/admin";
 import { loginSchema, signupSchema } from "@/schemas/auth.schema";
 import { assertWithinRateLimit } from "@/server/ai/rate-limit";
-import { assertWorkspaceEmailAllowed } from "@/server/auth/workspace-domain";
 import { sendSignInEmail } from "@/server/email/sign-in-link-email";
 import { assertSameOrigin } from "@/server/guards/same-origin";
 import { errorResponse } from "@/server/http/error-response";
@@ -42,9 +41,7 @@ export async function POST(request: Request) {
 
     if (input.purpose === "login") {
       const user = await findActiveUserByEmail(input.email);
-      if (user?.role === "employee") await assertWorkspaceEmailAllowed(user.companyId, input.email);
       const invite = user ? null : await findPendingInviteByEmail(input.email);
-      if (invite) await assertWorkspaceEmailAllowed(invite.companyId, input.email);
       if (!user && !invite) {
         throw new AuthorizationError("This email has not been added to Skylar. Ask an admin to add it first.");
       }

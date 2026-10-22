@@ -109,6 +109,20 @@ describe("getServerEnv", () => {
     });
   });
 
+  it("repairs an app URL saved without its scheme", async () => {
+    stubEnv({ NEXT_PUBLIC_APP_URL: "www.askskylarhr.com/" });
+    const getServerEnv = await loadGetServerEnv();
+
+    expect(getServerEnv().NEXT_PUBLIC_APP_URL).toBe("https://www.askskylarhr.com");
+  });
+
+  it("falls back to the Vercel production domain when the app URL is blank", async () => {
+    stubEnv({ NEXT_PUBLIC_APP_URL: "", VERCEL_PROJECT_PRODUCTION_URL: "www.askskylarhr.com" });
+    const getServerEnv = await loadGetServerEnv();
+
+    expect(getServerEnv().NEXT_PUBLIC_APP_URL).toBe("https://www.askskylarhr.com");
+  });
+
   it("parses the demo payment gate bypass", async () => {
     stubEnv({ DEMO_DISABLE_PAYMENT_GATE: "true" });
     const getServerEnv = await loadGetServerEnv();

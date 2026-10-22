@@ -12,12 +12,10 @@ export function AccountSettingsForm({
   displayName,
   companyName,
   canEditCompany,
-  allowedEmailDomains,
 }: {
   displayName: string;
   companyName: string;
   canEditCompany: boolean;
-  allowedEmailDomains: string[];
 }) {
   const router = useRouter();
   const [state, setState] = useState<AccountSettingsState | null>(null);
@@ -29,7 +27,6 @@ export function AccountSettingsForm({
     const result = await updateAccountSettingsAction({
       displayName: String(formData.get("displayName") ?? ""),
       companyName: String(formData.get("companyName") ?? companyName),
-      ...(canEditCompany ? { allowedEmailDomains: String(formData.get("allowedEmailDomains") ?? "").split(/[\s,]+/).filter(Boolean) } : {}),
     });
     setState(result);
     setIsPending(false);
@@ -60,14 +57,6 @@ export function AccountSettingsForm({
           <span className="text-xs text-paper-3">Only admins can rename the workspace.</span>
         )}
       </label>
-
-      {canEditCompany && (
-        <label className="grid gap-2">
-          <span className="text-sm font-semibold text-paper">Allowed team email domains</span>
-          <textarea name="allowedEmailDomains" defaultValue={allowedEmailDomains.join(", ")} placeholder="company.com, subsidiary.com" rows={3} className="rounded-xl border border-paper/10 bg-paper/[0.055] p-4 text-paper" />
-          <span className="text-xs leading-6 text-paper-3">Separate domains with commas. These apply to employee accounts and new invitations. Leave empty to allow any email domain. People must still be added or invited; a matching domain does not grant access. Admins keep access to manage these settings.</span>
-        </label>
-      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <button

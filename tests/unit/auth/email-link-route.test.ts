@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   findAccountBlockByEmail: vi.fn(),
   findActiveUserByEmail: vi.fn(),
   findPendingInviteByEmail: vi.fn(),
-  assertWorkspaceEmailAllowed: vi.fn(),
   generateSignInWithEmailLink: vi.fn(),
   sendSignInEmail: vi.fn(),
 }));
@@ -17,7 +16,6 @@ vi.mock("@/server/repositories/user.repository", () => ({
   findActiveUserByEmail: mocks.findActiveUserByEmail,
 }));
 vi.mock("@/server/repositories/invite.repository", () => ({ findPendingInviteByEmail: mocks.findPendingInviteByEmail }));
-vi.mock("@/server/auth/workspace-domain", () => ({ assertWorkspaceEmailAllowed: mocks.assertWorkspaceEmailAllowed }));
 vi.mock("@/server/email/sign-in-link-email", () => ({ sendSignInEmail: mocks.sendSignInEmail }));
 
 import { POST } from "@/app/api/auth/email-link/route";

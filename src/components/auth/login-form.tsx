@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { EmailForm } from "@/components/auth/email-form";
 import { VERIFY_PATH } from "@/constants/routes";
+import { normalizeAppUrl } from "@/lib/app-url";
 import { clearPendingSignup, saveMagicEmail } from "@/features/auth/magic-email";
 import { AccountBlockedClientError, accountBlockPath } from "@/features/auth/account-block";
 import { sendSignInLink } from "@/features/auth/send-sign-in-link";
@@ -13,9 +14,8 @@ type Status =
   | { phase: "sent"; email: string };
 
 function signInLinkUrl() {
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const origin = configuredUrl || window.location.origin;
-  return `${origin.replace(/\/$/, "")}${VERIFY_PATH}`;
+  const origin = normalizeAppUrl(process.env.NEXT_PUBLIC_APP_URL) ?? window.location.origin;
+  return `${origin}${VERIFY_PATH}`;
 }
 
 function authErrorMessage(error: unknown) {
@@ -24,7 +24,7 @@ function authErrorMessage(error: unknown) {
   if (error && typeof error === "object" && "code" in error) {
     const code = String((error as { code?: unknown }).code);
     if (code === "auth/unauthorized-domain") {
-      return "This domain is not allowed in Firebase Auth. Add localhost to Authorized domains.";
+      return "This domain is not allowed in Firebase Auth. Add it under Authentication → Settings → Authorized domains.";
     }
     if (code === "auth/operation-not-allowed") {
       return "Email-link sign-in is not enabled in Firebase Auth.";

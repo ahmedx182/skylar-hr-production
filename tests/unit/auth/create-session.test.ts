@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   acceptInvite: vi.fn(),
   findCompanySummaryById: vi.fn(),
   isPlatformAdminEmail: vi.fn(),
-  assertWorkspaceEmailAllowed: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({ adminAuth: () => mocks }));
@@ -26,7 +25,6 @@ vi.mock("@/server/repositories/invite.repository", () => ({
 }));
 
 vi.mock("@/server/auth/platform-admin-email", () => ({ isPlatformAdminEmail: mocks.isPlatformAdminEmail }));
-vi.mock("@/server/auth/workspace-domain", () => ({ assertWorkspaceEmailAllowed: mocks.assertWorkspaceEmailAllowed }));
 
 import { SESSION_MAX_AGE_MS } from "@/constants/auth";
 import { AuthenticationError } from "@/lib/errors";
@@ -206,14 +204,6 @@ describe("createSession", () => {
     mocks.verifyIdToken.mockResolvedValue({ uid: "u1", email: "owner@blocked.com", email_verified: true, auth_time: nowSeconds() });
     await expect(createSession("id-token", { companyName: "Example" })).resolves.toHaveProperty("cookie");
     expect(mocks.provisionSignupWorkspace).toHaveBeenCalled();
-  });
-
-  it("enforces the employee's workspace policy before minting a session", async () => {
-    mocks.findUserById.mockResolvedValue({ role: "employee", status: "active", companyId: "tenant-a" });
-    mocks.assertWorkspaceEmailAllowed.mockRejectedValue(new AuthenticationError("Domain denied"));
-    await expect(createSession("id-token")).rejects.toThrow("Domain denied");
-    expect(mocks.assertWorkspaceEmailAllowed).toHaveBeenCalledWith("tenant-a", "admin@example.com");
-    expect(mocks.createSessionCookie).not.toHaveBeenCalled();
   });
 
   it("refuses sign-in for a suspended workspace", async () => {
