@@ -6,6 +6,7 @@ import { assertWithinRateLimit } from "@/server/ai/rate-limit";
 import { errorResponse } from "@/server/http/error-response";
 import { parseJsonBody } from "@/server/http/parse-json-body";
 import { findPendingInviteByEmail } from "@/server/repositories/invite.repository";
+import { isHrAdvisorEmail } from "@/server/auth/hr-advisor-email";
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +20,10 @@ export async function POST(request: Request) {
     if (accountState) return NextResponse.json({ allowed: false, accountState });
     const invite = user ? null : await findPendingInviteByEmail(parsed.email);
 
-    return NextResponse.json({ allowed: Boolean(user || invite) });
+    // An HR advisor added by a super admin can sign in without a workspace or invite.
+    const hrAdvisor = user || invite ? false : await isHrAdvisorEmail(parsed.email, true);
+
+    return NextResponse.json({ allowed: Boolean(user || invite || hrAdvisor) });
   } catch (error) {
     return errorResponse(error, "POST /api/auth/allowed-email");
   }

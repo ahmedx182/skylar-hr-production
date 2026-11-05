@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  canResolveAdvisorCase,
-  toAdvisorQueueItem,
-  type AdvisorEscalationRecord,
-} from "@/features/advisor/escalation-queue";
+import { casePhaseLabel, isActiveEscalation, sortCases, type AdvisorEscalationRecord } from "@/features/advisor/escalation-queue";
+import { friendlyName } from "@/lib/person-name";
 
 function escalation(overrides: Partial<AdvisorEscalationRecord> = {}): AdvisorEscalationRecord {
   return {
@@ -22,44 +19,59 @@ function escalation(overrides: Partial<AdvisorEscalationRecord> = {}): AdvisorEs
     responseText: null,
     respondedAtMs: null,
     resolvedAtMs: null,
+    phase: "waiting",
+    afterHours: false,
+    claimedByName: null,
+    createdAtMs: 1000,
+    lastActivityMs: 1000,
+    reopenCount: 0,
     relatedLedger: [],
     ...overrides,
   };
 }
 
-describe("toAdvisorQueueItem", () => {
-  it("maps active escalation records into queue rows", () => {
-    expect(toAdvisorQueueItem(escalation())).toEqual({
-      id: "case-doc",
-      caseId: "CASE-001",
-      employeeName: "Employee One",
-      question: "What is the safest next step?",
-      statusLabel: "With advisor",
-      advisorLine: "Skylar Advisor - People advisor",
-      responseCommitment: "Reply within 4 business hours",
-      isActive: true,
-    });
-  });
-
-  it("keeps draft cases active in the queue", () => {
-    expect(toAdvisorQueueItem(escalation({ status: "draft_response" }))).toMatchObject({
-      statusLabel: "Draft saved",
-      isActive: true,
-    });
-  });
-
-  it("marks responded cases as waiting for resolution, not active queue work", () => {
-    expect(toAdvisorQueueItem(escalation({ status: "responded" }))).toMatchObject({
-      statusLabel: "Responded",
-      isActive: false,
-    });
+describe("casePhaseLabel", () => {
+  it("says where the chat stands in plain words", () => {
+    expect(casePhaseLabel(escalation())).toBe("Waiting for HR");
+    expect(casePhaseLabel(escalation({ phase: "connected", claimedByName: "ana" }))).toBe("With Ana");
+    expect(casePhaseLabel(escalation({ phase: "connected", claimedByName: null }))).toBe("With an advisor");
+    expect(casePhaseLabel(escalation({ phase: "closed" }))).toBe("Closed");
   });
 });
 
-describe("canResolveAdvisorCase", () => {
-  it("requires a responded case with saved response text", () => {
-    expect(canResolveAdvisorCase(escalation({ status: "responded", responseText: "Use this wording." }))).toBe(true);
-    expect(canResolveAdvisorCase(escalation({ status: "draft_response", responseText: "Use this wording." }))).toBe(false);
-    expect(canResolveAdvisorCase(escalation({ status: "responded", responseText: "" }))).toBe(false);
+describe("isActiveEscalation", () => {
+  it("counts a chat as open until HR closes it, including after the advisor has replied", () => {
+    expect(isActiveEscalation("with_advisor")).toBe(true);
+    expect(isActiveEscalation("draft_response")).toBe(true);
+    expect(isActiveEscalation("responded")).toBe(true);
+    expect(isActiveEscalation("resolved")).toBe(false);
+    expect(isActiveEscalation("closed")).toBe(false);
+  });
+});
+
+describe("sortCases", () => {
+  it("puts open chats first, then the most recently active", () => {
+    const list = [
+      escalation({ id: "old-closed", phase: "closed", lastActivityMs: 9000 }),
+      escalation({ id: "quiet-open", lastActivityMs: 2000 }),
+      escalation({ id: "busy-open", phase: "connected", lastActivityMs: 5000 }),
+      escalation({ id: "new-closed", phase: "closed", lastActivityMs: 9500 }),
+    ];
+    expect(sortCases(list).map((item) => item.id)).toEqual(["busy-open", "quiet-open", "new-closed", "old-closed"]);
+    expect(list[0].id).toBe("old-closed"); // the input isn't reordered
+  });
+});
+
+describe("friendlyName", () => {
+  it("turns the start of an email into a readable name", () => {
+    expect(friendlyName("ana")).toBe("Ana");
+    expect(friendlyName("ana.lopez@skylar.app")).toBe("Ana Lopez");
+    expect(friendlyName("ahmed_khan")).toBe("Ahmed Khan");
+  });
+
+  it("leaves a name someone wrote themselves alone, and has a fallback", () => {
+    expect(friendlyName("Dr. Ana de Souza")).toBe("Dr. Ana de Souza");
+    expect(friendlyName("  ")).toBe("Skylar advisor");
+    expect(friendlyName(null, "an advisor")).toBe("an advisor");
   });
 });

@@ -1,6 +1,11 @@
+import { SKYLAR_HR_COMPANY_ID } from "@/constants/auth";
 import type { Metadata } from "next";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
+import { AdvisorSettingsPanel } from "@/components/platform/advisor-settings-panel";
+import { HrAdvisorsPanel } from "@/components/platform/hr-advisors-panel";
 import { SuperAdminsPanel } from "@/components/platform/super-admins-panel";
+import { listHrAdvisorEmails } from "@/server/auth/hr-advisor-email";
+import { getAdvisorSettings } from "@/server/repositories/platform-settings.repository";
 import { UsersTable } from "@/components/platform/users-table";
 import { daysUntilPurge } from "@/features/platform/lifecycle";
 import { accountStateOf, type DirectoryUser, type SuperAdminRow, type WorkspaceState } from "@/features/platform/users";
@@ -16,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PlatformUsersPage() {
   const session = await requirePlatformAdminPage();
-  const [users, workspaces, platformAdmins] = await Promise.all([listPlatformUsers(), listWorkspaceRows(), listPlatformAdmins()]);
+  const [users, workspaces, platformAdmins, hrAdvisorEmails, advisorSettings] = await Promise.all([listPlatformUsers(), listWorkspaceRows(), listPlatformAdmins(), listHrAdvisorEmails(), getAdvisorSettings()]);
   const workspaceById = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
 
   const activeAdmins = new Map<string, number>();
@@ -28,7 +33,9 @@ export default async function PlatformUsersPage() {
 
   const directory: DirectoryUser[] = users.map((user) => {
     const workspace = workspaceById.get(user.companyId);
-    const workspaceState: WorkspaceState = workspace ? workspace.status : "unknown";
+    // Skylar's own HR team isn't in the customer workspace list.
+    const isHrTeam = user.companyId === SKYLAR_HR_COMPANY_ID;
+    const workspaceState: WorkspaceState = workspace ? workspace.status : isHrTeam ? "active" : "unknown";
     const accountState = accountStateOf(user);
     const superAdmin = platformAdmins.get(normalizeEmail(user.email)) ?? null;
     return {
@@ -41,7 +48,7 @@ export default async function PlatformUsersPage() {
       reason: user.reason,
       createdAtMs: user.createdAtMs,
       companyId: user.companyId,
-      workspaceName: workspace?.name ?? "Workspace not found",
+      workspaceName: workspace?.name ?? (isHrTeam ? "Skylar HR team" : "Workspace not found"),
       workspaceState,
       isOwner: Boolean(workspace?.ownerUid) && workspace?.ownerUid === user.id,
       isOnlyAdmin: user.role === "admin" && accountState === "active" && (activeAdmins.get(user.companyId) ?? 0) === 1,
@@ -68,6 +75,8 @@ export default async function PlatformUsersPage() {
           </p>
         </div>
         <SuperAdminsPanel admins={superAdmins} />
+        <HrAdvisorsPanel advisors={hrAdvisorEmails.map((email) => ({ email, hasAccount: accountEmails.has(email) }))} />
+        <AdvisorSettingsPanel initial={advisorSettings} />
         <UsersTable users={directory} />
       </section>
     </BriefingRoomFrame>

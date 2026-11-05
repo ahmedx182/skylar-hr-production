@@ -19,6 +19,7 @@ export const PLATFORM_AUDIT_PATH = "/platform/audit";
 export const SUSPENDED_PATH = "/suspended";
 export const PLATFORM_USERS_PATH = "/platform/users";
 export const PLATFORM_PRICING_PATH = "/platform/pricing";
+export const ADVISOR_DESK_PATH = "/advisor/desk";
 export const RECENTLY_DELETED_PATH = "/recently-deleted";
 export const ACCOUNT_SUSPENDED_PATH = "/account-suspended";
 export const ACCOUNT_DELETED_PATH = "/account-deleted";

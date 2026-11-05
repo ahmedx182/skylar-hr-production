@@ -10,6 +10,7 @@ import { sendSignInEmail } from "@/server/email/sign-in-link-email";
 import { assertSameOrigin } from "@/server/guards/same-origin";
 import { errorResponse } from "@/server/http/error-response";
 import { parseJsonBody } from "@/server/http/parse-json-body";
+import { isHrAdvisorEmail } from "@/server/auth/hr-advisor-email";
 import { findPendingInviteByEmail } from "@/server/repositories/invite.repository";
 import { findAccountBlockByEmail, findActiveUserByEmail } from "@/server/repositories/user.repository";
 
@@ -42,7 +43,9 @@ export async function POST(request: Request) {
     if (input.purpose === "login") {
       const user = await findActiveUserByEmail(input.email);
       const invite = user ? null : await findPendingInviteByEmail(input.email);
-      if (!user && !invite) {
+      // An HR advisor added by a super admin has no workspace or invite; their account is created at first sign-in.
+      const hrAdvisor = user || invite ? false : await isHrAdvisorEmail(input.email, true);
+      if (!user && !invite && !hrAdvisor) {
         throw new AuthorizationError("This email has not been added to Skylar. Ask an admin to add it first.");
       }
     }

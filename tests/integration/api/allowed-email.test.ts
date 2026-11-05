@@ -2,17 +2,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ findActiveUserByEmail: vi.fn(), findAccountBlockByEmail: vi.fn(), findPendingInviteByEmail: vi.fn() }));
 vi.mock("@/server/repositories/user.repository", () => mocks);
 vi.mock("@/server/repositories/invite.repository", () => mocks);
+const hr = vi.hoisted(() => ({ isHrAdvisorEmail: vi.fn() }));
+vi.mock("@/server/auth/hr-advisor-email", () => hr);
 import { POST } from "@/app/api/auth/allowed-email/route";
 const request = () => new Request("http://localhost:3000/api/auth/allowed-email", { method: "POST", headers: { origin: "http://localhost:3000", "Content-Type": "application/json" }, body: JSON.stringify({ email: "employee@acme.com" }) });
 describe("workspace login preflight", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.findAccountBlockByEmail.mockResolvedValue(null);
+    hr.isHrAdvisorEmail.mockResolvedValue(false);
   });
   it("lets invited employees request their first login link", async () => {
     mocks.findPendingInviteByEmail.mockResolvedValue({ companyId: "tenant-a" });
     const response = await POST(request());
     expect(await response.json()).toEqual({ allowed: true });
+  });
+  it("lets an HR advisor added by a super admin request a login link", async () => {
+    hr.isHrAdvisorEmail.mockResolvedValue(true);
+    expect(await (await POST(request())).json()).toEqual({ allowed: true });
   });
   it("does not allow uninvited emails merely because they match a domain", async () => {
     expect(await (await POST(request())).json()).toEqual({ allowed: false });

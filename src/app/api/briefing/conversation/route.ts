@@ -8,6 +8,7 @@ import {
   toEscalationEvent,
   type ChatEscalationOutcome,
 } from "@/features/briefing/chat-escalation";
+import { FORWARDED_MESSAGE, transferMessage } from "@/features/advisor/live-chat";
 import { escalateFromChat } from "@/server/ai/chat-escalation";
 import { buildEmployeeFileContext } from "@/server/ai/employee-context";
 import { streamSkylarConversation } from "@/server/ai/skylar-conversation";
@@ -18,6 +19,7 @@ import {
   reserveAdvisorMessage,
   type AdvisorAllowance,
 } from "@/server/repositories/billing.repository";
+import { afterHoursNow, findLiveCaseForEmployee, sendUserLiveMessage } from "@/server/repositories/advisor-live.repository";
 import {
   appendSkylarConversationTurn,
   listSkylarConversationMessages,
@@ -40,6 +42,19 @@ const conversationQuerySchema = z.object({
   page: z.coerce.number().int().min(0).max(20).default(0),
 });
 
+const SSE_HEADERS = {
+  "Cache-Control": "no-cache, no-store, no-transform",
+  Connection: "keep-alive",
+  "Content-Type": "text/event-stream; charset=utf-8",
+} as const;
+
+/** A fixed reply streamed in the same shape as an AI answer, so the chat screen needs no special case. */
+function fixedReply(events: Record<string, unknown>[]) {
+  const encoder = new TextEncoder();
+  const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n";
+  return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+}
+
 /** Earlier turns with this person that the manager chat remembers. */
 const MANAGER_HISTORY_MESSAGES = 30;
 
@@ -61,8 +76,11 @@ export async function GET(request: NextRequest) {
     if (!parsed.success) throw new ValidationError("Invalid saved conversation context.");
     const { page, ...context } = parsed.data;
     const { messages, hasMore } = await listSkylarConversationPage(session, context, page);
+    // The advisor chat for this person, so a reload (or a reopen) finds the live thread again.
+    const liveEnabled = getServerEnv().LIVE_ADVISOR_ENABLED;
+    const liveCase = liveEnabled && session.role !== "employee" && context.employeeId ? await findLiveCaseForEmployee(session, context.employeeId) : null;
 
-    return Response.json({ messages, hasMore });
+    return Response.json({ messages, hasMore, liveCaseId: liveCase?.id ?? null, liveAdvisorEnabled: liveEnabled });
   } catch (error) {
     const response = toErrorResponse(conversationError(error));
     return Response.json(response.body, { status: response.status });
@@ -81,9 +99,21 @@ export async function POST(request: NextRequest) {
       maxRequests: env.AI_RATE_LIMIT_MAX_REQUESTS,
       windowMs: env.AI_RATE_LIMIT_WINDOW_MS,
     });
-    // Free workspaces get FREE_MESSAGE_LIMIT advisor messages; throws a 402 once they're used up.
+    // Free workspaces get FREE_MESSAGE_LIMIT advisor messages; throws a 402 once they're used up. Messages to a human
+    // advisor count against that limit just like messages to the assistant.
     const allowance: AdvisorAllowance = env.DEMO_DISABLE_PAYMENT_GATE ? { reserved: false } : await reserveAdvisorMessage(session);
     if (allowance.reserved) refund = () => releaseAdvisorMessage(session, allowance.counter);
+    // A person already owns this chat: pass the message to them and keep the assistant out of it.
+    if (env.LIVE_ADVISOR_ENABLED && session.role !== "employee" && input.employeeId) {
+      const liveCase = await findLiveCaseForEmployee(session, input.employeeId);
+      if (liveCase?.isOpen) {
+        await sendUserLiveMessage(session, liveCase.id, input.prompt);
+        refund = null; // delivered, so it counts
+        // Delivered already; a failed history write must not make the user send it twice.
+        await appendSkylarConversationTurn(session, input, input.prompt, FORWARDED_MESSAGE).catch((appendError: unknown) => console.error("Could not save the forwarded message to chat history", appendError));
+        return fixedReply([{ text: FORWARDED_MESSAGE }, { liveCaseId: liveCase.id }]);
+      }
+    }
     const isEmployee = session.role === "employee";
     const history = isEmployee ? [] : await listSkylarConversationMessages(session, input, MANAGER_HISTORY_MESSAGES);
     // Managers: the selected person's notes are loaded here, so the chat sees them wherever it was opened.
@@ -97,7 +127,16 @@ export async function POST(request: NextRequest) {
     // Managers: high-risk messages are escalated server-side and the bot is told what happened.
     const escalation: ChatEscalationOutcome = isEmployee
       ? { kind: "none" }
-      : await escalateFromChat(session, { prompt: input.prompt, employeeId: input.employeeId });
+      : await escalateFromChat(session, { prompt: input.prompt, employeeId: input.employeeId, history, liveEnabled: env.LIVE_ADVISOR_ENABLED, allowReopen: env.ADVISOR_ALLOW_REOPEN });
+    // A new escalation moves the chat to a person: one fixed message and no AI answer. The message that triggered it
+    // was sent to a human, so it counts.
+    if (env.LIVE_ADVISOR_ENABLED && escalation.kind === "escalated") {
+      refund = null;
+      const notice = transferMessage(await afterHoursNow());
+      // The case exists by now; a failed history write must not tell the user it didn't work.
+      await appendSkylarConversationTurn(session, input, input.prompt, notice).catch((appendError: unknown) => console.error("Could not save the transfer to chat history", appendError));
+      return fixedReply([{ escalation: toEscalationEvent(escalation) }, { text: notice }, { liveCaseId: escalation.escalationId }]);
+    }
     const escalationNotice = buildEscalationNotice(escalation) ?? undefined;
     const escalationEvent = toEscalationEvent(escalation);
     const stream = await streamSkylarConversation(env, { ...chatInput, history, callerRole: session.role, escalationNotice }).catch((error: unknown) => {
@@ -113,6 +152,9 @@ export async function POST(request: NextRequest) {
         try {
           if (escalationEvent) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ escalation: escalationEvent })}\n\n`));
+          }
+          if (escalation.kind === "offer") {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ offer: { reason: escalation.reason } })}\n\n`));
           }
           for await (const text of stream) {
             assistantText += text;
@@ -130,13 +172,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return new Response(body, {
-      headers: {
-        "Cache-Control": "no-cache, no-store, no-transform",
-        Connection: "keep-alive",
-        "Content-Type": "text/event-stream; charset=utf-8",
-      },
-    });
+    return new Response(body, { headers: SSE_HEADERS });
   } catch (error) {
     // The message never got an answer, so don't charge it against the free allowance.
     await refund?.().catch((refundError: unknown) => console.error("Could not refund free message", refundError));

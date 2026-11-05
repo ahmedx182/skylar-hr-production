@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   findCompanySummaryById: vi.fn(),
   findEmployeeIdByEmail: vi.fn(),
   isPlatformAdminEmail: vi.fn(),
+  isHrAdvisorEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({
@@ -18,6 +19,7 @@ vi.mock("@/server/repositories/user.repository", () => ({
 }));
 
 vi.mock("@/server/auth/platform-admin-email", () => ({ isPlatformAdminEmail: mocks.isPlatformAdminEmail }));
+vi.mock("@/server/auth/hr-advisor-email", () => ({ isHrAdvisorEmail: mocks.isHrAdvisorEmail }));
 
 import { resolveSession } from "@/server/auth/resolve-session";
 
@@ -39,6 +41,7 @@ describe("resolveSession", () => {
     mocks.findUserById.mockResolvedValue(activeUser);
     mocks.findCompanySummaryById.mockResolvedValue({ name: "Acme", status: "active", deleteAfterMs: null });
     mocks.isPlatformAdminEmail.mockResolvedValue(false);
+    mocks.isHrAdvisorEmail.mockResolvedValue(false);
   });
 
   it("returns null without a cookie and never calls Firebase", async () => {
@@ -61,6 +64,7 @@ describe("resolveSession", () => {
       role: "manager",
       linkedEmployeeId: null,
       isPlatformAdmin: false,
+      isHrAdvisor: false,
       workspaceBlocked: false,
       workspaceDeleteAfterMs: null,
     });
@@ -73,6 +77,14 @@ describe("resolveSession", () => {
 
     expect(await resolveSession("cookie")).toMatchObject({ workspaceBlocked: true, isPlatformAdmin: true });
     expect(mocks.isPlatformAdminEmail).toHaveBeenCalledWith("m@acme.com", true);
+  });
+
+  it("flags an HR advisor from the server-side grant, for verified emails only", async () => {
+    mocks.isHrAdvisorEmail.mockResolvedValue(true);
+    mocks.verifySessionCookie.mockResolvedValue({ uid: "u1", email: "hr@skylar.app", email_verified: true });
+
+    expect(await resolveSession("cookie")).toMatchObject({ isHrAdvisor: true, isPlatformAdmin: false });
+    expect(mocks.isHrAdvisorEmail).toHaveBeenCalledWith("hr@skylar.app", true);
   });
 
   it("flags a soft-deleted workspace as locked and reports when it will be purged", async () => {

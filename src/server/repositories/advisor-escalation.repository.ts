@@ -1,14 +1,18 @@
 import "server-only";
 import { isSoftDeleted } from "./soft-delete";
 import { FieldValue, type DocumentData } from "firebase-admin/firestore";
-import { ConflictError, NotFoundError } from "@/lib/errors";
+import { NotFoundError } from "@/lib/errors";
+import type { ClassifierConfidence, DetectionSource } from "@/features/advisor/escalation-detection";
+import { liveChatPhase, RESPONSE_COMMITMENT } from "@/features/advisor/live-chat";
 import { classifyLedgerRisk } from "@/features/briefing/risk-classification";
 import { adminDb } from "@/lib/firebase/admin";
 import { sendAdvisorEscalationNotification } from "@/server/email/advisor-escalation-notification";
-import type {
-  AdvisorCaseLedgerItem,
+import {
+  isActiveEscalation,
+  type AdvisorCaseLedgerItem,
   AdvisorEscalationRecord,
 } from "@/features/advisor/escalation-queue";
+import { afterHoursNow, seedLiveThread } from "./advisor-live.repository";
 import type { AuthSession } from "@/types/auth";
 
 const ESCALATIONS_COLLECTION = "advisor_escalations";
@@ -17,9 +21,12 @@ const EMPLOYEES_COLLECTION = "employees";
 
 type EscalationStatus = AdvisorEscalationRecord["status"];
 
-type AdvisorMutationInput = {
-  action: "save_draft" | "mark_responded" | "resolve";
-  responseText?: string;
+type EscalationOptions = {
+  /** What the user wrote in chat. It becomes the case's question and opens the live thread. */
+  openingMessage?: string;
+  /** Why the chat was transferred, when it wasn't the note's own risk rule. */
+  reason?: string;
+  detection?: { source: DetectionSource; confidence: ClassifierConfidence | null };
 };
 
 function caseIdForLedger(ledgerEntryId: string): string {
@@ -49,6 +56,7 @@ function escalationFromData(
   id: string,
   data: DocumentData,
   relatedLedger: AdvisorCaseLedgerItem[] = [],
+  afterHours = false,
 ): AdvisorEscalationRecord {
   return {
     id,
@@ -61,11 +69,17 @@ function escalationFromData(
     status: escalationStatus(data.status),
     advisorName: String(data.advisorName ?? "Skylar advisor"),
     advisorCredentialLine: String(data.advisorCredentialLine ?? "Skylar advisor"),
-    responseCommitment: String(data.responseCommitment ?? "Reply within 4 business hours"),
+    responseCommitment: String(data.responseCommitment ?? RESPONSE_COMMITMENT),
     draftResponse: typeof data.draftResponse === "string" ? data.draftResponse : null,
     responseText: typeof data.responseText === "string" ? data.responseText : null,
     respondedAtMs: timestampMs(data.respondedAt),
     resolvedAtMs: timestampMs(data.resolvedAt),
+    afterHours,
+    phase: liveChatPhase(escalationStatus(data.status), typeof data.claimedByUid === "string" ? data.claimedByUid : null),
+    claimedByName: typeof data.claimedByName === "string" ? data.claimedByName : null,
+    createdAtMs: timestampMs(data.createdAt),
+    lastActivityMs: timestampMs(data.lastMessageAt) ?? timestampMs(data.updatedAt),
+    reopenCount: typeof data.reopenCount === "number" ? data.reopenCount : 0,
     relatedLedger,
   };
 }
@@ -98,20 +112,31 @@ async function listRelatedLedger(
     .slice(0, 5);
 }
 
+/** A deleted employee's cases are hidden with the file, and come back if it is restored. */
+async function softDeletedEmployeeIds(companyId: string): Promise<Set<string>> {
+  const snapshot = await adminDb().collection(EMPLOYEES_COLLECTION).where("companyId", "==", companyId).get();
+  return new Set(snapshot.docs.filter((doc) => isSoftDeleted(doc)).map((doc) => doc.id));
+}
+
 export async function listCompanyAdvisorEscalations(
   companyId: string,
 ): Promise<AdvisorEscalationRecord[]> {
-  const snapshot = await adminDb()
-    .collection(ESCALATIONS_COLLECTION)
-    .where("companyId", "==", companyId)
-    .get();
+  const [snapshot, hidden, afterHours] = await Promise.all([
+    adminDb().collection(ESCALATIONS_COLLECTION).where("companyId", "==", companyId).get(),
+    softDeletedEmployeeIds(companyId),
+    afterHoursNow(),
+  ]);
 
-  return snapshot.docs.map((doc) => escalationFromData(doc.id, doc.data()));
+  return snapshot.docs
+    .filter((doc) => !hidden.has(String(doc.get("employeeId") ?? "")))
+    .sort((a, b) => (timestampMs(b.get("createdAt")) ?? 0) - (timestampMs(a.get("createdAt")) ?? 0))
+    .map((doc) => escalationFromData(doc.id, doc.data(), [], afterHours));
 }
 
 export async function createAdvisorEscalationFromLedger(
   session: AuthSession,
   ledgerEntryId: string,
+  options: EscalationOptions = {},
 ): Promise<AdvisorEscalationRecord> {
   const db = adminDb();
   const ledgerRef = db.collection(LEDGER_COLLECTION).doc(ledgerEntryId);
@@ -140,9 +165,11 @@ export async function createAdvisorEscalationFromLedger(
   const description = String(ledgerData.description ?? "High-risk employee note needs review.");
   const risk = classifyLedgerRisk(description);
   const riskReason =
-    typeof ledgerData.riskReason === "string" && ledgerData.riskReason.trim()
+    options.reason ??
+    (typeof ledgerData.riskReason === "string" && ledgerData.riskReason.trim()
       ? ledgerData.riskReason
-      : risk.reason ?? "High-risk HR note needs advisor review before the manager acts.";
+      : risk.reason ?? "High-risk HR note needs advisor review before the manager acts.");
+  const question = options.openingMessage?.trim() || `Review this employee record before next action: ${description}`;
   const caseId = caseIdForLedger(ledgerEntryId);
   const employeeName = String(employeeData.name ?? "Employee");
   const now = FieldValue.serverTimestamp();
@@ -152,12 +179,14 @@ export async function createAdvisorEscalationFromLedger(
     employeeId,
     employeeName,
     caseId,
-    question: `Review this employee record before next action: ${description}`,
+    question,
     escalationReason: riskReason,
+    detectionSource: options.detection?.source ?? "manual",
+    detectionConfidence: options.detection?.confidence ?? null,
     status: "with_advisor",
     advisorName: "Skylar advisor",
     advisorCredentialLine: "People advisor",
-    responseCommitment: "Reply within 4 business hours",
+    responseCommitment: RESPONSE_COMMITMENT,
     draftResponse: null,
     responseText: null,
     sourceLedgerEntryId: ledgerEntryId,
@@ -169,6 +198,12 @@ export async function createAdvisorEscalationFromLedger(
     updatedAt: now,
     updatedBy: session.uid,
   });
+
+  // The case stands without its opening messages, so this must not stop the advisors being told.
+  await seedLiveThread(
+    escalationRef.id,
+    options.openingMessage ? { text: options.openingMessage, authorName: session.displayName ?? null, authorUid: session.uid } : undefined,
+  ).catch((error: unknown) => console.error("Could not open the live thread", error));
 
   await ledgerRef.set(
     {
@@ -183,9 +218,9 @@ export async function createAdvisorEscalationFromLedger(
   const notification = await sendAdvisorEscalationNotification({
     caseId,
     employeeName,
-    question: `Review this employee record before next action: ${description}`,
+    question,
     escalationReason: riskReason,
-    responseCommitment: "Reply within 4 business hours",
+    responseCommitment: RESPONSE_COMMITMENT,
   });
 
   await escalationRef.set(
@@ -216,133 +251,23 @@ export async function getCompanyAdvisorEscalation(
 
   const employeeId = String(data.employeeId ?? "");
   const relatedLedger = await listRelatedLedger(companyId, employeeId);
-  return escalationFromData(doc.id, data, relatedLedger);
+  return escalationFromData(doc.id, data, relatedLedger, await afterHoursNow());
 }
 
-export async function updateAdvisorEscalation(
-  session: AuthSession,
-  escalationId: string,
-  input: AdvisorMutationInput,
-): Promise<AdvisorEscalationRecord> {
-  const db = adminDb();
-  const escalationRef = db.collection(ESCALATIONS_COLLECTION).doc(escalationId);
-  const escalationSnapshot = await escalationRef.get();
-  const data = escalationSnapshot.data();
-
-  if (!escalationSnapshot.exists || !data || data.companyId !== session.companyId) {
-    throw new NotFoundError("Advisor escalation not found.");
-  }
-
-  const current = escalationFromData(escalationSnapshot.id, data);
-  const responseText = input.responseText?.trim() ?? "";
-  const now = FieldValue.serverTimestamp();
-  const update: Record<string, unknown> = {
-    updatedAt: now,
-    updatedBy: session.uid,
-  };
-
-  if (input.action === "save_draft") {
-    update.status = "draft_response";
-    update.draftResponse = responseText;
-  }
-
-  if (input.action === "mark_responded") {
-    if (!responseText) throw new ConflictError("Add a response before marking the case responded.");
-    update.status = "responded";
-    update.draftResponse = responseText;
-    update.responseText = responseText;
-    update.respondedAt = now;
-  }
-
-  if (input.action === "resolve") {
-    if (current.status !== "responded" || !current.responseText?.trim()) {
-      throw new ConflictError("Respond to the case before resolving it.");
-    }
-    update.status = "resolved";
-    update.resolvedAt = now;
-  }
-
-  const employeeRef = db.collection(EMPLOYEES_COLLECTION).doc(current.employeeId);
-  const employeeSnapshot = await employeeRef.get();
-  if (!employeeSnapshot.exists || employeeSnapshot.get("companyId") !== session.companyId) {
-    throw new NotFoundError("Employee not found.");
-  }
-
-  const batch = db.batch();
-  batch.update(escalationRef, update);
-
-  if (input.action === "mark_responded" || input.action === "resolve") {
-    const ledgerRef = db.collection(LEDGER_COLLECTION).doc();
-    const description =
-      input.action === "resolve"
-        ? `Advisor case ${current.caseId} resolved.`
-        : `Advisor response for ${current.caseId}: ${responseText}`;
-    batch.set(ledgerRef, {
-      companyId: session.companyId,
-      employeeId: current.employeeId,
-      type: input.action === "resolve" ? "advisor_resolution" : "advisor_response",
-      date: now,
-      description,
-      statusDot: input.action === "resolve" ? "green" : "red",
-      reference: current.caseId,
-      conversationId: null,
-      documentId: null,
-      advisorEscalationId: escalationId,
-      createdAt: now,
-      createdBy: session.uid,
-    });
-    batch.update(employeeRef, {
-      summary: { text: description, updatedAt: now },
-      updatedAt: now,
-    });
-  }
-
-  await batch.commit();
-  return getCompanyAdvisorEscalation(session.companyId, escalationId);
-}
-
-export type EscalationAnalytics = {
-  total: number;
-  open: number;
-  responded: number;
-  resolved: number;
-};
-
-/** Cases still waiting on the advisor (with advisor or draft saved). Returns 0 if the lookup fails. */
+/** Chats that are not closed yet, whether waiting for HR or in conversation with them. Returns 0 if the lookup fails. */
 export async function countOpenEscalations(companyId: string): Promise<number> {
   try {
-    const snapshot = await adminDb()
-      .collection(ESCALATIONS_COLLECTION)
-      .where("companyId", "==", companyId)
-      .select("status")
-      .get();
+    const [snapshot, hidden] = await Promise.all([
+      adminDb().collection(ESCALATIONS_COLLECTION).where("companyId", "==", companyId).select("status", "employeeId").get(),
+      softDeletedEmployeeIds(companyId),
+    ]);
 
     return snapshot.docs.filter((doc) => {
-      const status = escalationStatus(doc.get("status"));
-      return status === "with_advisor" || status === "draft_response";
+      if (hidden.has(String(doc.get("employeeId") ?? ""))) return false;
+      return isActiveEscalation(escalationStatus(doc.get("status")));
     }).length;
   } catch (error) {
     console.error("Could not count open escalations", error);
     return 0;
   }
-}
-
-export async function getEscalationAnalytics(companyId: string): Promise<EscalationAnalytics> {
-  const snapshot = await adminDb()
-    .collection(ESCALATIONS_COLLECTION)
-    .where("companyId", "==", companyId)
-    .get();
-
-  let open = 0;
-  let responded = 0;
-  let resolved = 0;
-
-  for (const doc of snapshot.docs) {
-    const status = escalationStatus(doc.get("status"));
-    if (status === "with_advisor" || status === "draft_response") open++;
-    else if (status === "responded") responded++;
-    else if (status === "resolved" || status === "closed") resolved++;
-  }
-
-  return { total: snapshot.size, open, responded, resolved };
 }

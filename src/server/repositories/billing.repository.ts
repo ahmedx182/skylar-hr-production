@@ -15,7 +15,9 @@ import { FREE_PACKAGE_ID } from "@/features/pricing/package";
 import { NotFoundError, PaymentRequiredError } from "@/lib/errors";
 import { adminDb } from "@/lib/firebase/admin";
 import type { AuthSession } from "@/types/auth";
+import { freeTrialFor, type FreeTrial } from "@/features/advisor/trial";
 import { getFreeMessageLimit } from "./pricing.repository";
+import { getAdvisorSettings } from "./platform-settings.repository";
 
 const COMPANIES_COLLECTION = "companies";
 const SUBSCRIPTIONS_COLLECTION = "subscriptions";
@@ -228,11 +230,17 @@ export async function reserveAdvisorMessage(
 ): Promise<AdvisorAllowance> {
   const db = adminDb();
   const subscriptionRef = db.collection(SUBSCRIPTIONS_COLLECTION).doc(session.companyId);
+  const companyRef = db.collection(COMPANIES_COLLECTION).doc(session.companyId);
 
   const freePackageRef = db.collection("pricing_packages").doc(FREE_PACKAGE_ID);
+  const { freeTrialDays } = await getAdvisorSettings();
 
   return db.runTransaction(async (transaction) => {
-    const [snapshot, freePackage] = await Promise.all([transaction.get(subscriptionRef), transaction.get(freePackageRef)]);
+    const [snapshot, freePackage, company] = await Promise.all([
+      transaction.get(subscriptionRef),
+      transaction.get(freePackageRef),
+      transaction.get(companyRef),
+    ]);
     const configuredLimit = freePackage.exists ? freePackage.get("advisorMessageLimit") : null;
     const limit = typeof configuredLimit === "number" ? configuredLimit : FREE_MESSAGE_LIMIT;
     const data = snapshot.exists ? (snapshot.data() ?? {}) : {};
@@ -248,6 +256,12 @@ export async function reserveAdvisorMessage(
         { merge: true },
       );
       return { reserved: true, counter: "gift" };
+    }
+
+    // Free use lasts for the trial (14 days by default, set by a super admin), counted from when the workspace was created.
+    const trial = freeTrialFor(timestampMs(company.exists ? company.data()?.createdAt : null), freeTrialDays);
+    if (trial.expired) {
+      throw new PaymentRequiredError(`Your ${trial.days}-day free trial has ended. Upgrade in Billing to keep chatting.`);
     }
 
     if (state.freeMessagesUsed >= limit) {
@@ -279,4 +293,10 @@ export async function releaseAdvisorMessage(
     .collection(SUBSCRIPTIONS_COLLECTION)
     .doc(session.companyId)
     .set({ [counter === "gift" ? "giftMessagesUsed" : "freeMessagesUsed"]: FieldValue.increment(-1) }, { merge: true });
+}
+
+/** Where a workspace stands in its free trial, for the Billing page. */
+export async function getFreeTrialForCompany(companyId: string): Promise<FreeTrial> {
+  const [company, { freeTrialDays }] = await Promise.all([adminDb().collection(COMPANIES_COLLECTION).doc(companyId).get(), getAdvisorSettings()]);
+  return freeTrialFor(timestampMs(company.exists ? company.data()?.createdAt : null), freeTrialDays);
 }

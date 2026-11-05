@@ -100,7 +100,8 @@ export async function findPendingInviteByEmail(email: string): Promise<CompanyIn
     .collection(INVITES_COLLECTION)
     .where("email", "==", normalizedEmail)
     .where("status", "==", "pending")
-    .orderBy("createdAt", "desc")
+    // Equality filters only: adding an orderBy here needs a composite index that production doesn't have,
+    // and it would break first sign-in for everyone who isn't already a user. More than one is an error anyway.
     .limit(2)
     .get();
 

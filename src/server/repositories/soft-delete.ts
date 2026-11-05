@@ -22,3 +22,13 @@ export function restoreFields() {
     deletedBy: FieldValue.delete(),
   };
 }
+
+/** A case's messages are a subcollection, which Firestore does not remove along with the case. */
+export async function stageAdvisorCaseRemoval(
+  writer: { delete(ref: FirebaseFirestore.DocumentReference): unknown },
+  ref: FirebaseFirestore.DocumentReference,
+): Promise<void> {
+  const messages = await ref.collection("messages").select().get();
+  messages.docs.forEach((message) => void writer.delete(message.ref));
+  void writer.delete(ref);
+}

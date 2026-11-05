@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildAdvisorEscalationEmail } from "@/features/advisor/escalation-email";
+import { buildAdvisorEscalationEmail, buildLiveReplyEmail } from "@/features/advisor/escalation-email";
 
 describe("buildAdvisorEscalationEmail", () => {
-  it("includes the case, employee, reason, and queue link", () => {
+  it("includes the case, employee, reason, and desk link", () => {
     const email = buildAdvisorEscalationEmail({
       caseId: "ADV-123",
       employeeName: "Ahmed Test",
@@ -16,7 +16,7 @@ describe("buildAdvisorEscalationEmail", () => {
     expect(email.text).toContain("Potential retaliation concern.");
     expect(email.text).toContain("https://example.com/advisor");
     expect(email.html).toContain("ADV-123");
-    expect(email.html).toContain("Open the advisor queue");
+    expect(email.html).toContain("Open the advisor desk");
   });
 
   it("escapes unsafe html in the rendered email", () => {
@@ -33,5 +33,15 @@ describe("buildAdvisorEscalationEmail", () => {
     expect(email.html).toContain("&lt;script&gt;");
     expect(email.html).toContain("Use &lt;b&gt;care&lt;/b&gt;.");
     expect(email.html).not.toContain("<script>");
+  });
+
+  it("says the advisor has read the case, in a separate email from a reply", () => {
+    const read = buildLiveReplyEmail({ caseId: "ADV-9", audience: "user", url: "https://x.test/advisor", kind: "reviewed" });
+    expect(read.subject).toBe("[Skylar] Your HR advisor has read case ADV-9");
+    expect(read.text).toContain("has read advisor case ADV-9 and is reviewing it");
+    const reply = buildLiveReplyEmail({ caseId: "ADV-9", audience: "user", url: "https://x.test/advisor" });
+    expect(reply.subject).toBe("[Skylar] Your HR advisor replied on ADV-9");
+    expect(reply.text).not.toContain("read advisor case");
+    expect(read.html).not.toContain("replied");
   });
 });

@@ -13,7 +13,7 @@ import { formatPackagePrice, isPurchasable } from "@/features/pricing/package";
 import { getServerEnv } from "@/lib/env/server";
 import { requirePageSession } from "@/server/auth/require-session";
 import { requireRole } from "@/server/auth/require-role";
-import { getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
+import { getFreeTrialForCompany, getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
 import { listPublishedPackages } from "@/server/repositories/pricing.repository";
 
 export const metadata: Metadata = { title: "Billing" };
@@ -25,7 +25,7 @@ export default async function BillingPage({
 }) {
   const session = await requirePageSession();
   requireRole(session, ["admin"]);
-  const billing = await getOrCreateCompanyBillingState(session);
+  const [billing, trial] = await Promise.all([getOrCreateCompanyBillingState(session), getFreeTrialForCompany(session.companyId)]);
   const billingReturn = parseBillingReturn(searchParams.billing);
   const env = getServerEnv();
   const paymentGateDisabled = env.DEMO_DISABLE_PAYMENT_GATE;
@@ -34,6 +34,9 @@ export default async function BillingPage({
     return { id: pkg.id, name: pkg.name, priceLabel: `${price.amount} ${price.period}` };
   });
   const stripeReady = Boolean(env.STRIPE_SECRET_KEY) && plans.length > 0;
+  const trialEnded = billing.plan !== "paid" && trial.expired;
+  const planLabel =
+    billing.plan === "paid" ? "Paid" : trialEnded ? "Trial ended" : trial.daysLeft !== null ? `Free trial, ${trial.daysLeft} ${trial.daysLeft === 1 ? "day" : "days"} left` : "Free";
   // A gift only matters while nothing else already makes the workspace paid.
   const gift =
     billing.giftActive && billing.gift && billing.planOverride !== "paid" && billing.status !== "active" && billing.status !== "past_due"
@@ -47,6 +50,11 @@ export default async function BillingPage({
     <BriefingRoomFrame session={session} active="Billing">
       <section className="grid content-start gap-4">
         {billingReturn && <BillingReturnNotice result={billingReturn} isPaid={billing.plan === "paid"} />}
+        {trialEnded && (
+          <p role="status" className="rounded-2xl bg-attention/10 px-4 py-3 text-sm leading-6 text-attention">
+            Your {trial.days}-day free trial has ended. Upgrade to keep chatting with Skylar and your HR advisor.
+          </p>
+        )}
         <div className="rounded-[24px] bg-ink-2 px-5 py-5 text-paper shadow-[0_20px_56px_rgba(0,0,0,0.22),inset_0_0_0_1px_rgba(244,239,231,0.055)] md:px-6">
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
@@ -55,7 +63,7 @@ export default async function BillingPage({
                 {billing.plan === "paid" ? "Your workspace is on the paid plan." : "Your workspace is on the free plan."}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-paper-3 md:text-base">
-                Free workspaces include {billing.freeMessageLimit} advisor messages. Stripe Checkout starts the
+                Free workspaces include {billing.freeMessageLimit} advisor messages{trial.days > 0 ? ` during a ${trial.days}-day free trial` : ""}. Stripe Checkout starts the
                 paid plan for unlimited advisor chat, and webhooks update the company record after Stripe
                 confirms the subscription.
               </p>
@@ -86,7 +94,7 @@ export default async function BillingPage({
               <BillingMetric
                 icon={CheckCircle2}
                 label="Plan"
-                value={billing.plan === "paid" ? "Paid" : "Free"}
+                value={planLabel}
               />
             </div>
 

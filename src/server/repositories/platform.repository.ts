@@ -12,6 +12,7 @@ import {
   type PlanGift,
   type PlanOverride,
 } from "@/features/billing/subscription-status";
+import { SKYLAR_HR_COMPANY_ID } from "@/constants/auth";
 import { isActiveEscalation, type AdvisorEscalationRecord } from "@/features/advisor/escalation-queue";
 import { bucketIndex, type ResolvedRange } from "@/features/platform/range";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -75,8 +76,9 @@ export type PlatformAuditEntry = {
 
 /** grant_paid/revoke_paid are kept so older audit entries still read; new grants are gifts. */
 export type WorkspaceAction = "block" | "unblock" | "gift_access" | "end_gift" | "grant_paid" | "revoke_paid";
-export type UserAuditAction = "user_suspend" | "user_unsuspend" | "user_delete" | "user_restore" | "user_purge" | "platform_admin_grant" | "platform_admin_revoke";
-export type PlatformAction = WorkspaceAction | "delete" | "restore_workspace" | "purge" | PackageAuditAction | UserAuditAction;
+export type UserAuditAction = "user_suspend" | "user_unsuspend" | "user_delete" | "user_restore" | "user_purge" | "platform_admin_grant" | "platform_admin_revoke" | "hr_advisor_grant" | "hr_advisor_revoke";
+export type AdvisorAuditAction = "advisor_view_case" | "advisor_claim" | "advisor_take_over" | "advisor_release" | "advisor_resolve" | "advisor_false_alarm" | "advisor_close_unclaimed" | "advisor_settings_update";
+export type PlatformAction = WorkspaceAction | "delete" | "restore_workspace" | "purge" | PackageAuditAction | UserAuditAction | AdvisorAuditAction;
 
 export type WorkspaceUser = {
   id: string;
@@ -162,6 +164,8 @@ export async function listWorkspaceRows(): Promise<WorkspaceRow[]> {
   }
 
   return companies
+    // Skylar's own HR team isn't a customer.
+    .filter((doc) => doc.id !== SKYLAR_HR_COMPANY_ID)
     .map((doc): WorkspaceRow => {
       const data = doc.data();
       const sub = billing.get(doc.id) ?? {};

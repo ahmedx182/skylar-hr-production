@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   acceptInvite: vi.fn(),
   findCompanySummaryById: vi.fn(),
   isPlatformAdminEmail: vi.fn(),
+  isHrAdvisorEmail: vi.fn(),
+  provisionHrAdvisor: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/admin", () => ({ adminAuth: () => mocks }));
@@ -18,6 +20,7 @@ vi.mock("@/server/repositories/user.repository", () => ({
   findUserById: mocks.findUserById,
   provisionSignupWorkspace: mocks.provisionSignupWorkspace,
   provisionInvitedUser: mocks.provisionInvitedUser,
+  provisionHrAdvisor: mocks.provisionHrAdvisor,
 }));
 vi.mock("@/server/repositories/invite.repository", () => ({
   findPendingInviteByEmail: mocks.findPendingInviteByEmail,
@@ -25,6 +28,7 @@ vi.mock("@/server/repositories/invite.repository", () => ({
 }));
 
 vi.mock("@/server/auth/platform-admin-email", () => ({ isPlatformAdminEmail: mocks.isPlatformAdminEmail }));
+vi.mock("@/server/auth/hr-advisor-email", () => ({ isHrAdvisorEmail: mocks.isHrAdvisorEmail }));
 
 import { SESSION_MAX_AGE_MS } from "@/constants/auth";
 import { AuthenticationError } from "@/lib/errors";
@@ -117,6 +121,17 @@ describe("createSession", () => {
     await expect(createSession("id-token")).rejects.toThrow("This email has not been added to Skylar.");
     expect(mocks.provisionSignupWorkspace).not.toHaveBeenCalled();
     expect(mocks.createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("signs in an HR advisor granted by a super admin, with no invite or workspace", async () => {
+    mocks.findUserById.mockResolvedValue(null);
+    mocks.findPendingInviteByEmail.mockResolvedValue(null);
+    mocks.isHrAdvisorEmail.mockResolvedValue(true);
+    mocks.createSessionCookie.mockResolvedValue("cookie");
+
+    await expect(createSession("id-token")).resolves.toMatchObject({ cookie: "cookie" });
+    expect(mocks.provisionHrAdvisor).toHaveBeenCalledWith({ uid: "u1", email: expect.any(String) });
+    expect(mocks.provisionInvitedUser).not.toHaveBeenCalled();
   });
 
   it("accepts an invited user with no signup metadata when a pending invite exists", async () => {

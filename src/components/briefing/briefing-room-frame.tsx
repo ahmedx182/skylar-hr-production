@@ -1,10 +1,13 @@
 import { AccountMenu } from "@/components/briefing/account-menu";
+import { AdvisorNotifications } from "@/components/briefing/advisor-notifications";
 import { AppShellGrid } from "@/components/briefing/app-shell-grid";
 import { BriefingIndexNav, type IndexSection } from "@/components/briefing/briefing-index-nav";
 import { EmployeeSkylarChat } from "@/components/briefing/employee-skylar-chat";
 import { FloatingSkylarAction } from "@/components/briefing/floating-skylar-action";
 import { QuickActions } from "@/components/briefing/quick-actions";
 import { PlatformNav, SidebarModeSwitch, type PlatformSection } from "@/components/platform/platform-nav";
+import { SKYLAR_HR_COMPANY_ID } from "@/constants/auth";
+import { isAdvisor } from "@/server/auth/advisor-access";
 import { getLayoutPreferences } from "@/server/preferences/layout-preferences";
 import { countOpenEscalations } from "@/server/repositories/advisor-escalation.repository";
 import { listCompanyEmployees } from "@/server/repositories/briefing-read.repository";
@@ -24,6 +27,7 @@ export async function BriefingRoomFrame({
   mode?: "workspace" | "platform";
 }) {
   const isPlatform = mode === "platform";
+  const isHrTeam = session.companyId === SKYLAR_HR_COMPANY_ID;
   const [employees, openEscalations] = isPlatform
     ? [[], 0]
     : await Promise.all([
@@ -62,8 +66,8 @@ export async function BriefingRoomFrame({
 
         <AppShellGrid
           initialCollapsed={getLayoutPreferences().navCollapsed}
-          title={isPlatform ? "Platform" : "Today's flow"}
-          tagline={isPlatform ? "Every workspace in one place." : "Guided first. Jump when needed."}
+          title={isPlatform ? "Platform" : isHrTeam ? "HR advisors" : "Today's flow"}
+          tagline={isPlatform ? "Every workspace in one place." : isHrTeam ? "Escalated chats from every workspace." : "Guided first. Jump when needed."}
           bottomSlot={session.isPlatformAdmin ? <SidebarModeSwitch mode={mode} /> : undefined}
           sidebar={
             isPlatform ? (
@@ -75,8 +79,10 @@ export async function BriefingRoomFrame({
                   role={session.role}
                   linkedEmployeeId={session.linkedEmployeeId}
                   advisorOpenCount={openEscalations}
+                  isAdvisor={isAdvisor(session)}
+                  isHrTeam={isHrTeam}
                 />
-                {session.role === "admin" && (
+                {session.role === "admin" && !isHrTeam && (
                   <>
                     <div className="h-px bg-paper/10" />
                     <QuickActions role={session.role} employees={employeeOptions} initialEmployeeId={quickActionEmployeeId} />
@@ -89,7 +95,8 @@ export async function BriefingRoomFrame({
           {children}
         </AppShellGrid>
       </div>
-      {!isPlatform && (session.role === "admin" ? <FloatingSkylarAction /> : <EmployeeSkylarChat />)}
+      {!isPlatform && !isHrTeam && (session.role === "admin" ? <FloatingSkylarAction /> : <EmployeeSkylarChat />)}
+      {!isPlatform && !isHrTeam && session.role === "admin" && <AdvisorNotifications />}
     </main>
   );
 }

@@ -19,6 +19,8 @@ export interface AuthSession {
   linkedEmployeeId?: string | null;
   /** Skylar staff with cross-workspace access (PLATFORM_ADMIN_EMAILS). Absent means false. */
   isPlatformAdmin?: boolean;
+  /** HR advisor granted by a super admin: may work the advisor desk, nothing else on the platform. */
+  isHrAdvisor?: boolean;
   /** Set when a platform admin has suspended or deleted this workspace. */
   workspaceBlocked?: boolean;
   /** When the workspace is soft-deleted: the time its data will be permanently removed. */

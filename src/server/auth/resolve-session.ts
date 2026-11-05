@@ -4,6 +4,7 @@ import { adminAuth } from "@/lib/firebase/admin";
 import { findCompanySummaryById, findEmployeeIdByEmail, findUserById } from "@/server/repositories/user.repository";
 import type { AuthSession } from "@/types/auth";
 import { isFirebaseAuthError } from "./firebase-auth-error";
+import { isHrAdvisorEmail } from "./hr-advisor-email";
 import { isPlatformAdminEmail } from "./platform-admin-email";
 
 /**
@@ -39,6 +40,7 @@ export async function resolveSession(cookie: string | undefined): Promise<AuthSe
     role: user.role,
     linkedEmployeeId,
     isPlatformAdmin: await isPlatformAdminEmail(claims.email, claims.email_verified === true),
+    isHrAdvisor: await isHrAdvisorEmail(claims.email, claims.email_verified === true),
     workspaceBlocked: Boolean(company) && company!.status !== "active",
     workspaceDeleteAfterMs: company?.status === "deleted" ? company.deleteAfterMs : null,
   };

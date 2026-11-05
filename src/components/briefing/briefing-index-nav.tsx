@@ -1,5 +1,6 @@
-import { Archive, CreditCard, FileText, Settings, ShieldAlert, UserRound, Workflow } from "lucide-react";
+import { Archive, CreditCard, FileText, MessagesSquare, Settings, ShieldAlert, UserRound, Workflow } from "lucide-react";
 import {
+  ADVISOR_DESK_PATH,
   ADVISOR_PATH,
   BILLING_PATH,
   BRIEFING_PATH,
@@ -43,6 +44,13 @@ const indexItems = [
     icon: ShieldAlert,
     description: "Escalations",
     adminOnly: true,
+  },
+  {
+    label: "Advisor desk",
+    href: ADVISOR_DESK_PATH,
+    icon: MessagesSquare,
+    description: "Live HR chats",
+    advisorOnly: true,
   },
   {
     label: "Billing",
@@ -91,17 +99,26 @@ export function BriefingIndexNav({
   role,
   linkedEmployeeId,
   advisorOpenCount,
+  isAdvisor = false,
+  isHrTeam = false,
 }: {
   active: IndexSection | string;
   role: Role;
   linkedEmployeeId?: string | null;
   advisorOpenCount?: number;
+  /** HR advisors and super admins also get the live advisor desk. */
+  isAdvisor?: boolean;
+  /** Skylar's own HR team has no employees to manage, so the desk is all they get. */
+  isHrTeam?: boolean;
 }) {
   // Billing stays out of the sidebar; it is reachable from the account menu.
+  // Skylar's own HR team: advisors get the desk only; anyone whose role was removed gets just their account.
   const items =
-    role === "admin"
+    role === "admin" && isHrTeam && !isAdvisor
+      ? employeeItems(null)
+      : role === "admin"
       ? indexItems
-          .filter((item) => item.label !== "Billing")
+          .filter((item) => (isHrTeam ? item.label === "Advisor desk" : item.label !== "Billing" && (isAdvisor || !("advisorOnly" in item))))
           .map((item) => ({ ...item, title: item.label as string }))
       : employeeItems(linkedEmployeeId);
 

@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { AttachFileButton } from "@/components/briefing/attach-file-button";
 import { EscalationNoticeCard } from "@/components/briefing/escalation-notice-card";
+import { LiveAdvisorThread } from "@/components/briefing/live-advisor-thread";
+import { ADVISOR_REQUEST_TEXT } from "@/features/advisor/escalation-detection";
 import type { EscalationEvent } from "@/features/briefing/chat-escalation";
 import { SkylarMessageText } from "@/components/briefing/skylar-message-text";
 import { BILLING_PATH } from "@/constants/routes";
@@ -21,6 +23,8 @@ type SkylarMessage = {
   role: "user" | "assistant";
   text: string;
   escalation?: EscalationEvent;
+  /** The AI answered, but this might need a person: show the "Connect me" button. */
+  offerAdvisor?: boolean;
 };
 
 type EmployeeOption = {
@@ -30,11 +34,13 @@ type EmployeeOption = {
   summary: string | null;
 };
 
-type OpenSkylarEvent = CustomEvent<SkylarContext & { prompt?: string }>;
+type OpenSkylarEvent = CustomEvent<SkylarContext & { prompt?: string; startAdvisor?: boolean }>;
 
 type SavedConversationResponse = {
   messages?: SkylarMessage[];
   hasMore?: boolean;
+  liveCaseId?: string | null;
+  liveAdvisorEnabled?: boolean;
   error?: { message?: string };
 };
 
@@ -98,8 +104,18 @@ export function FloatingSkylarAction() {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState("");
   const [needsUpgrade, setNeedsUpgrade] = useState(false);
+  /** The advisor case for the selected person. While it is open the chat is with a real HR advisor. */
+  const [liveCaseId, setLiveCaseId] = useState<string | null>(null);
+  const [isLiveOpen, setIsLiveOpen] = useState(false);
+  const [liveAdvisorEnabled, setLiveAdvisorEnabled] = useState(true);
+  /** Bumped whenever the server says a person has the chat, so a thread that had closed refreshes and sees it reopened. */
+  const [liveVersion, setLiveVersion] = useState(0);
+  /** HR advisor activity the manager hasn't looked at, shown on the button while the chat is closed. */
+  const [unreadAdvisor, setUnreadAdvisor] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastAutoPromptKeyRef = useRef<string | null>(null);
+  /** Only the newest history load may fill the chat; true while it is running. */
+  const historyLoadRef = useRef({ id: 0, isLoading: false });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -150,7 +166,8 @@ export function FloatingSkylarAction() {
 
   const sendMessage = useCallback(async (text: string, messageContext = context) => {
     const trimmed = text.trim();
-    if (trimmed.length < 3 || isLoading) return;
+    // The saved history replaces the message list when it arrives, which would wipe a message sent before then.
+    if (trimmed.length < 3 || isLoading || historyLoadRef.current.isLoading) return;
     const submittedText = trimmed;
 
     setDraft("");
@@ -187,8 +204,20 @@ export function FloatingSkylarAction() {
           if (!line) continue;
           const data = line.slice(6);
           if (data === "[DONE]") continue;
-          const parsed = JSON.parse(data) as { text?: string; error?: string; escalation?: EscalationEvent };
+          const parsed = JSON.parse(data) as { text?: string; error?: string; escalation?: EscalationEvent; liveCaseId?: string; offer?: { reason: string } };
           if (parsed.error) throw new Error(parsed.error);
+          if (parsed.liveCaseId) {
+            setLiveCaseId(parsed.liveCaseId);
+            setLiveVersion((version) => version + 1);
+          }
+          if (parsed.offer) {
+            setMessages((current) => {
+              const next = [...current];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") next[next.length - 1] = { ...last, offerAdvisor: true };
+              return next;
+            });
+          }
           if (parsed.escalation) {
             const escalation = parsed.escalation;
             setMessages((current) => {
@@ -228,13 +257,17 @@ export function FloatingSkylarAction() {
     return params;
   }, []);
 
-  const loadSavedContext = useCallback(async (nextContext: SkylarContext, prompt?: string) => {
+  const loadSavedContext = useCallback(async (nextContext: SkylarContext, prompt?: string, force = false) => {
     setContext(nextContext);
     setMessages([]);
+    setLiveCaseId(null);
+    setIsLiveOpen(false);
     setHistoryPage(0);
     setHasMore(false);
     setError("");
     setIsLoadingHistory(true);
+    const loadId = ++historyLoadRef.current.id;
+    historyLoadRef.current.isLoading = true;
     let savedMessages: SkylarMessage[] = [];
 
     try {
@@ -243,21 +276,29 @@ export function FloatingSkylarAction() {
         credentials: "same-origin",
       });
       const payload = (await response.json().catch(() => null)) as SavedConversationResponse | null;
+      // They moved to another person while this was loading, so it isn't theirs to show.
+      if (loadId !== historyLoadRef.current.id) return;
       if (!response.ok) throw new Error(payload?.error?.message ?? "Skylar could not load saved context.");
       savedMessages = Array.isArray(payload?.messages) ? payload.messages : [];
       setMessages(savedMessages);
       setHasMore(payload?.hasMore ?? false);
+      setLiveCaseId(payload?.liveCaseId ?? null);
+      setLiveAdvisorEnabled(payload?.liveAdvisorEnabled !== false);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Skylar could not load saved context.");
+      if (loadId === historyLoadRef.current.id) setError(requestError instanceof Error ? requestError.message : "Skylar could not load saved context.");
     } finally {
-      setIsLoadingHistory(false);
-      if (prompt) {
+      if (loadId === historyLoadRef.current.id) {
+        historyLoadRef.current.isLoading = false;
+        setIsLoadingHistory(false);
+      }
+      if (prompt && loadId === historyLoadRef.current.id) {
         const autoPromptKey = [
           nextContext.employeeId ?? nextContext.employeeName ?? "no-employee",
           nextContext.cardTitle ?? "no-card",
           normalizePrompt(prompt),
         ].join(":");
-        if (!hasAskedPrompt(savedMessages, prompt) && lastAutoPromptKeyRef.current !== autoPromptKey) {
+        // Asking for a person again is a new request each time, so it skips the "already asked" guard.
+        if (force || (!hasAskedPrompt(savedMessages, prompt) && lastAutoPromptKeyRef.current !== autoPromptKey)) {
           lastAutoPromptKeyRef.current = autoPromptKey;
           void sendMessage(prompt, nextContext);
         }
@@ -433,12 +474,20 @@ export function FloatingSkylarAction() {
     function handleOpen(event: Event) {
       const detail = (event as OpenSkylarEvent).detail;
       setIsOpen(true);
-      void loadSavedContext(detail, detail.prompt);
+      void loadSavedContext(detail, detail.startAdvisor ? ADVISOR_REQUEST_TEXT : detail.prompt, Boolean(detail.startAdvisor));
     }
 
     window.addEventListener("skylar:open", handleOpen);
     return () => window.removeEventListener("skylar:open", handleOpen);
   }, [loadSavedContext]);
+
+  useEffect(() => {
+    function handleUnread(event: Event) {
+      setUnreadAdvisor((event as CustomEvent<{ count: number }>).detail.count);
+    }
+    window.addEventListener("skylar:unread", handleUnread);
+    return () => window.removeEventListener("skylar:unread", handleUnread);
+  }, []);
 
   return (
     <>
@@ -449,13 +498,23 @@ export function FloatingSkylarAction() {
           void loadEmployees();
         }}
         className="skylar-shimmer fixed bottom-5 right-5 z-30 grid size-12 place-items-center overflow-hidden rounded-2xl bg-ink-2 text-paper shadow-[0_18px_50px_rgba(0,0,0,0.36),inset_0_0_0_1px_rgba(244,239,231,0.055),inset_0_1px_0_rgba(244,239,231,0.08)] transition-transform after:pointer-events-none after:absolute after:inset-y-0 after:left-0 after:w-1/2 after:bg-gradient-to-r after:from-transparent after:via-paper/20 after:to-transparent hover:-translate-y-0.5 md:bottom-5 md:right-5"
-        aria-label="Ask Skylar"
+        aria-label={unreadAdvisor > 0 ? `Ask Skylar, ${unreadAdvisor} new from HR` : "Ask Skylar"}
       >
         <span
           aria-hidden="true"
           className="relative z-10 block size-8 bg-[url('/brand/logo.png')] bg-[length:28px_25px] bg-center bg-no-repeat"
         />
       </button>
+      {/* Outside the button, which clips its contents. */}
+      {unreadAdvisor > 0 && (
+        <span
+          data-testid="unread-badge"
+          aria-hidden="true"
+          className="pointer-events-none fixed bottom-[3.9rem] right-3 z-40 grid min-w-5 place-items-center rounded-full bg-risk px-1.5 text-[11px] font-semibold leading-5 text-paper shadow-[0_0_0_2px_#0a0a0a]"
+        >
+          {unreadAdvisor}
+        </span>
+      )}
 
       {isOpen && (
         <section className="fixed bottom-24 right-5 z-40 flex h-[min(640px,calc(100dvh-7rem))] max-h-[680px] w-[calc(100vw-2.5rem)] max-w-[560px] flex-col overflow-hidden rounded-[20px] border border-paper/[0.08] bg-ink-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] md:bottom-24 md:right-6">
@@ -467,7 +526,7 @@ export function FloatingSkylarAction() {
               />
               <div className="min-w-0">
                 <p className="text-base font-semibold text-paper">Skylar assistant</p>
-                <p className="mt-1 text-sm leading-5 text-paper-3">Prepare the conversation, one thoughtful step at a time.</p>
+                <p className="mt-1 hidden text-sm leading-5 text-paper-3 sm:block">Prepare the conversation, one thoughtful step at a time.</p>
               </div>
             </div>
             <div className="relative flex shrink-0 items-start gap-2">
@@ -560,6 +619,19 @@ export function FloatingSkylarAction() {
                     {message.text ? (message.role === "assistant" ? <SkylarMessageText text={message.text} /> : message.text) : (isLoading ? "Thinking..." : "")}
                   </div>
                 </div>
+                {message.offerAdvisor && !liveCaseId && (
+                  <div className="pl-9">
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => void sendMessage(ADVISOR_REQUEST_TEXT)}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-paper px-3.5 text-xs font-semibold text-ink transition-opacity hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+                    >
+                      <UserRound className="size-3.5" aria-hidden="true" />
+                      Connect me to an HR advisor
+                    </button>
+                  </div>
+                )}
                 </Fragment>
               ))}
               {error && <p className="border-l-2 border-risk px-3 py-2 text-sm leading-6 text-risk">{error}</p>}
@@ -576,6 +648,14 @@ export function FloatingSkylarAction() {
             </div>
           </div>
 
+          {liveCaseId && (
+            <div className="border-t border-paper/[0.055] p-3">
+              <LiveAdvisorThread key={`${liveCaseId}:${liveVersion}`} escalationId={liveCaseId} compactWhenClosed onOpenChange={setIsLiveOpen} />
+            </div>
+          )}
+
+          {/* While an HR advisor has the chat, the thread above is the only place to write. */}
+          {!isLiveOpen && (
           <form
             className="border-t border-paper/[0.055] p-4"
             onSubmit={(event) => {
@@ -583,6 +663,15 @@ export function FloatingSkylarAction() {
               void sendMessage(draft);
             }}
           >
+            {liveAdvisorEnabled && <button
+              type="button"
+              disabled={isLoading || isLoadingHistory}
+              onClick={() => void sendMessage(ADVISOR_REQUEST_TEXT)}
+              className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-paper-3 transition-colors hover:text-paper disabled:opacity-50"
+            >
+              <UserRound className="size-3.5" aria-hidden="true" />
+              Talk to an HR advisor
+            </button>}
             <label className="sr-only" htmlFor="skylar-chat-input">
               Message Skylar
             </label>
@@ -608,7 +697,7 @@ export function FloatingSkylarAction() {
               />
               <button
                 type="submit"
-                disabled={isLoading || draft.trim().length < 3}
+                disabled={isLoading || isLoadingHistory || draft.trim().length < 3}
                 className="grid size-11 shrink-0 place-items-center rounded-lg bg-paper text-ink transition-opacity hover:opacity-90 disabled:opacity-45"
                 aria-label="Send message"
               >
@@ -616,6 +705,7 @@ export function FloatingSkylarAction() {
               </button>
             </div>
           </form>
+          )}
         </section>
       )}
     </>

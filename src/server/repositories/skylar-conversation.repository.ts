@@ -119,6 +119,26 @@ export async function listSkylarConversationMessages(
     .slice(-limit);
 }
 
+/** The manager's chat with Skylar about one employee, for the HR advisor picking up the case. */
+export async function listConversationForAdvisorCase(
+  companyId: string,
+  userId: string,
+  employeeId: string,
+  limit = 30,
+): Promise<SkylarConversationMessage[]> {
+  const docId = `${companyId}__${userId}__${skylarConversationThreadKey({ employeeId })}`;
+  const doc = await adminDb().collection(CONVERSATIONS_COLLECTION).doc(docId).get();
+  const data = doc.data();
+  if (!doc.exists || !data || data.companyId !== companyId || data.userId !== userId) return [];
+
+  const rawMessages = Array.isArray(data.messages) ? data.messages : [];
+  return rawMessages
+    .map(messageFromData)
+    .filter((message): message is SkylarConversationMessage => Boolean(message))
+    .sort((a, b) => a.createdAtMs - b.createdAtMs)
+    .slice(-limit);
+}
+
 export async function listSkylarConversationPage(
   session: AuthSession,
   context: SkylarConversationContext,
