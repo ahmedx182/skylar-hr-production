@@ -253,6 +253,42 @@
     }
   }
 
+  /* Scroll reveal: native view-timeline, no JS. Browsers without support render the content as-is. */
+  @keyframes lp-reveal {
+    from { opacity: 0; transform: translateY(28px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes lp-reveal-x {
+    from { opacity: 0; transform: translateX(-24px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes lp-line-draw {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .lp-reveal,
+      .lp-reveal-x,
+      .lp-line-draw {
+        animation-fill-mode: backwards; /* release transform after reveal so hover lifts still work */
+        animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+        animation-timeline: view();
+        animation-range: entry 0% entry 45%;
+      }
+      .lp-reveal   { animation-name: lp-reveal; }
+      .lp-reveal-x { animation-name: lp-reveal-x; }
+      .lp-line-draw { animation-name: lp-line-draw; animation-fill-mode: both; transform-origin: left; animation-timing-function: linear; animation-range: entry 10% cover 40%; }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lp-fade-up, .lp-fade-in, .lp-card-rise, .lp-float, .lp-pill-pop, .lp-glow-pulse,
+    .lp-dot-pulse, .lp-border-glow, .lp-count-in, .lp-card-shimmer::after {
+      animation: none;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .skylar-card-next,
     .skylar-card-rise {

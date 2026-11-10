@@ -3,32 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, ArrowUpRight, CheckCircle2, FileText, ShieldAlert, Users, Zap } from "lucide-react";
 import { BRIEFING_PATH, LOGIN_PATH, PRIVACY_PATH, SIGNUP_PATH, TERMS_PATH } from "@/constants/routes";
-import { DEFAULT_PACKAGES, displayFeatures, formatPackagePrice, isFreePackage, type PricingPackage } from "@/features/pricing/package";
-import { listPublishedPackages } from "@/server/repositories/pricing.repository";
 import { getSession } from "@/server/auth/get-session";
-
-const FALLBACK_PACKAGES: PricingPackage[] = DEFAULT_PACKAGES.map((pkg) => ({
-  ...pkg,
-  archived: false,
-  stripeProductId: null,
-  stripePriceId: null,
-  createdAtMs: null,
-  updatedAtMs: null,
-}));
-
-/** The landing page must render even if the database is briefly unreachable. */
-async function loadPackages(): Promise<PricingPackage[]> {
-  try {
-    const packages = await listPublishedPackages();
-    return packages.length ? packages : FALLBACK_PACKAGES;
-  } catch {
-    return FALLBACK_PACKAGES;
-  }
-}
 
 export default async function MarketingPage() {
   if (await getSession()) redirect(BRIEFING_PATH);
-  const packages = await loadPackages();
 
   return (
     <div className="min-h-dvh bg-[#0d0b09] text-paper selection:bg-[#F2A93B]/20">
@@ -43,7 +21,7 @@ export default async function MarketingPage() {
           <nav className="hidden items-center gap-7 lg:flex">
             {["#product", "#how-it-works", "#pricing"].map((href, i) => (
               <a key={href} href={href} className="text-[13.5px] text-paper/45 transition-colors duration-200 hover:text-paper">
-                {["Product", "How it works", "Pricing"][i]}
+                {["Product", "How it works", "Plans"][i]}
               </a>
             ))}
           </nav>
@@ -55,7 +33,7 @@ export default async function MarketingPage() {
               href={SIGNUP_PATH}
               className="inline-flex h-[34px] items-center gap-2 rounded-full bg-paper px-5 text-[13px] font-semibold text-[#0d0b09] transition-opacity hover:opacity-90"
             >
-              Get started
+              Try Skylar free
               <ArrowRight className="size-3" aria-hidden="true" />
             </Link>
           </div>
@@ -77,23 +55,21 @@ export default async function MarketingPage() {
             <div className="grid min-h-[calc(100dvh-58px)] items-center gap-14 py-16 lg:grid-cols-[1fr_460px] lg:gap-16 lg:py-20">
 
               {/* Left — copy */}
-              <div className="max-w-xl">
+              <div className="max-w-2xl">
                 <p className="lp-pill-pop mb-7 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#F2A93B]/75">
                   <span className="lp-dot-pulse size-1.5 rounded-full bg-[#F2A93B]" aria-hidden="true" />
-                  HR AI · Briefing Room
+                  Your next people decision
                 </p>
 
-                <h1 className="lp-fade-up lp-d-100 text-[2.75rem] font-semibold leading-[1.07] tracking-[-0.025em] text-paper md:text-[3.5rem] lg:text-[4rem]">
-                  Your people work,
+                <h1 className="lp-fade-up lp-d-100 text-[2.75rem] font-semibold leading-[1.07] tracking-[-0.025em] text-paper md:text-[3.5rem] lg:text-[3.75rem]">
+                  <span className="whitespace-nowrap">Less second-guessing.</span>
                   <br />
-                  <span className="text-paper/35">ordered and ready</span>
-                  <br />
-                  every morning.
+                  <span className="text-paper/35">Clear next steps.</span>
                 </h1>
 
                 <p className="lp-fade-up lp-d-200 mt-7 max-w-[400px] text-[1.0625rem] leading-[1.8] text-paper/50">
-                  Skylar reads every open HR thread, ranks them by urgency, and delivers
-                  a plain-language briefing — so every conversation starts prepared.
+                  A difficult conversation. A policy question. Something you haven&apos;t dealt with
+                  before. Work through it in real time with Skylar AI, or access a human Skylar HR pro when the questions get tough.
                 </p>
 
                 <div className="lp-fade-up lp-d-300 mt-10 flex flex-wrap items-center gap-4">
@@ -101,7 +77,7 @@ export default async function MarketingPage() {
                     href={SIGNUP_PATH}
                     className="group inline-flex h-11 items-center gap-2 rounded-full bg-paper px-7 text-sm font-semibold text-[#0d0b09] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_8px_24px_rgba(244,239,231,0.14)] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_12px_36px_rgba(244,239,231,0.24)]"
                   >
-                    Start free
+                    Try Skylar for 14 days
                     <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
                   </Link>
                   <Link
@@ -113,21 +89,8 @@ export default async function MarketingPage() {
                   </Link>
                 </div>
 
-                <p className="lp-fade-in lp-d-400 mt-4 text-xs text-paper/25">No credit card · Cancel any time</p>
+                <p className="lp-fade-in lp-d-400 mt-4 text-xs text-paper/25">No credit card required</p>
 
-                {/* Metrics row */}
-                <div className="mt-12 flex flex-wrap gap-8 pt-8">
-                  {[
-                    { n: "< 5 min", d: "Signup to first plan", delay: "lp-d-500" },
-                    { n: "4 hrs",   d: "Advisor SLA",           delay: "lp-d-600" },
-                    { n: "100%",    d: "Passwordless",           delay: "lp-d-700" },
-                  ].map(({ n, d, delay }) => (
-                    <div key={d} className={`lp-count-in ${delay}`}>
-                      <p className="text-[1.35rem] font-semibold tabular-nums text-paper">{n}</p>
-                      <p className="mt-0.5 text-[11.5px] text-paper/35">{d}</p>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               {/* Right — product card */}
@@ -136,8 +99,8 @@ export default async function MarketingPage() {
                 <div className="lp-glow-pulse pointer-events-none absolute -inset-10 bg-[radial-gradient(ellipse_at_center,rgba(242,169,59,0.10),transparent_65%)]" />
 
                 {/* Depth cards behind */}
-                <div className="absolute inset-x-10 top-6 h-16 rounded-[18px] bg-white/[0.015] ring-1 ring-white/[0.04]" />
-                <div className="absolute inset-x-5 top-3 h-20 rounded-[20px] bg-white/[0.03] ring-1 ring-white/[0.06]" />
+                <div className="absolute inset-x-10 top-6 h-16 rounded-[18px] bg-paper/[0.015] ring-1 ring-paper/[0.04]" />
+                <div className="absolute inset-x-5 top-3 h-20 rounded-[20px] bg-paper/[0.03] ring-1 ring-paper/[0.06]" />
 
                 {/* Main briefing card — floats + shimmer on load */}
                 <div className="lp-float lp-card-shimmer relative overflow-hidden rounded-[22px] bg-[#f0e9e0] text-[#1c1510] shadow-[0_40px_80px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.08)] transition-shadow duration-500 hover:shadow-[0_48px_100px_rgba(0,0,0,0.72),0_0_0_1px_rgba(255,255,255,0.12)]">
@@ -147,18 +110,18 @@ export default async function MarketingPage() {
                       <Image src="/brand/logo.png" alt="" width={16} height={16} aria-hidden="true" className="opacity-60" />
                       <span className="text-[10.5px] font-semibold uppercase tracking-[0.15em] text-[#1c1510]/45">Skylar Briefing</span>
                     </div>
-                    <span className="text-[10.5px] text-[#1c1510]/35">Thu, Oct 2 · 8:14 am</span>
+                    <span className="text-[10.5px] text-[#1c1510]/35">Example: before a review</span>
                   </div>
 
                   <div className="px-6 py-5">
                     <p className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-[#1c1510]/30">
-                      Priority 1 of 5
+                      Start with what&apos;s still open
                     </p>
                     <h3 className="mt-2.5 text-[1.15rem] font-semibold leading-snug text-[#1c1510]">
-                      Check in with Marcus before his performance review at 2 pm.
+                      Don&apos;t let last week&apos;s pay question get lost in today&apos;s review.
                     </h3>
                     <p className="mt-2.5 text-[13px] leading-[1.65] text-[#1c1510]/55">
-                      He raised a pay question last week. Skylar suggests acknowledging it early — before it surfaces mid-review.
+                      Marcus asked about pay. Open with that context, listen to what&apos;s changed and record the next step after the conversation.
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-1.5">
@@ -167,7 +130,7 @@ export default async function MarketingPage() {
                     </div>
 
                     <div className="mt-4 space-y-1.5">
-                      {["Talking points drafted", "Script ready", "Filed to employee record"].map((item) => (
+                      {["Review talking points", "Review draft", "Save to employee file"].map((item) => (
                         <div key={item} className="flex items-center gap-2 text-[12px] text-[#1c1510]/50">
                           <CheckCircle2 className="size-3.5 shrink-0 text-[#2e9955]" aria-hidden="true" />
                           {item}
@@ -182,17 +145,17 @@ export default async function MarketingPage() {
                       <button type="button" className="rounded-full bg-[#1c1510] px-4 py-1.5 text-[12px] font-semibold text-[#f0e9e0] transition-all duration-200 hover:scale-105 hover:bg-[#2e2318] active:scale-95">Next →</button>
                       <button type="button" className="rounded-full border border-[#1c1510]/10 px-4 py-1.5 text-[12px] text-[#1c1510]/40 transition-colors duration-200 hover:border-[#1c1510]/20 hover:text-[#1c1510]/60">Not now</button>
                     </div>
-                    <span className="text-[10.5px] text-[#1c1510]/25">Prepared by Skylar AI</span>
+                    <span className="text-[10.5px] text-[#1c1510]/25">AI-generated draft. Review before use.</span>
                   </div>
                 </div>
 
                 {/* Floating advisor pill */}
-                <div className="lp-pill-pop lp-d-900 lp-border-glow absolute -bottom-5 -right-3 hidden rounded-xl border border-white/[0.08] bg-[#17130f] px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.6)] lg:block">
-                  <p className="text-[9.5px] font-bold uppercase tracking-widest text-paper/30">Advisor case</p>
-                  <p className="mt-1 text-[13px] font-semibold text-paper">Reply within 4 hrs</p>
+                <div className="lp-pill-pop lp-d-900 lp-border-glow absolute -bottom-5 -right-3 hidden rounded-xl border border-paper/[0.08] bg-[#17130f] px-4 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.6)] lg:block">
+                  <p className="text-[9.5px] font-bold uppercase tracking-widest text-paper/30">Human HR support</p>
+                  <p className="mt-1 text-[13px] font-semibold text-paper">Ask a Skylar HR professional</p>
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <span className="lp-dot-pulse size-1.5 rounded-full bg-[#F2A93B]" aria-hidden="true" />
-                    <span className="text-[11px] text-[#F2A93B]">With advisor</span>
+                    <span className="text-[11px] text-[#F2A93B]">One free escalation in your trial</span>
                   </div>
                 </div>
               </div>
@@ -201,122 +164,126 @@ export default async function MarketingPage() {
         </section>
 
         {/* ══════════════════════════════════════════════════════════
-            PRODUCT SECTION — no divider, flows out of hero
+            PROOF STRIP
         ══════════════════════════════════════════════════════════ */}
-        <section id="product" className="relative px-6 pb-32 pt-12 md:px-10 md:pb-40 md:pt-16">
-          {/* Mid-page ambient glow */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
-
-          <div className="mx-auto max-w-7xl">
-            <div className="grid gap-16 lg:grid-cols-2 lg:gap-28">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#F2A93B]/65">What Skylar does</p>
-                <h2 className="mt-5 text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-paper md:text-5xl">
-                  One AI that holds
-                  <br />
-                  every people thread.
-                </h2>
-                <p className="mt-5 max-w-[380px] text-[15.5px] leading-[1.8] text-paper/45">
-                  Not a form builder or a policy library. A thinking partner that remembers every conversation, flags every risk, and tells you what to do next.
-                </p>
-
-                <div className="mt-10 space-y-6">
-                  {[
-                    { icon: <Zap className="size-[15px]" />, title: "Live-in-5", body: "Describe a situation. Get a complete action plan — recommended approach, script, documentation — in under five minutes." },
-                    { icon: <Users className="size-[15px]" />, title: "Employee memory", body: "Every note and conversation saved per employee. The second session starts exactly where the first ended." },
-                    { icon: <ShieldAlert className="size-[15px]" />, title: "Advisor escalation", body: "High-risk situations flagged and routed to a named HR advisor with full context. 4-hour response commitment." },
-                    { icon: <FileText className="size-[15px]" />, title: "Daily briefing", body: "Prioritised card stack every morning. Advisor cases first, then what's due, then context. Just tap NEXT." },
-                  ].map(({ icon, title, body }) => (
-                    <div key={title} className="group flex gap-3.5 transition-all duration-300">
-                      <div className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg border border-white/[0.07] bg-white/[0.04] text-paper/40 transition-all duration-300 group-hover:border-[#F2A93B]/20 group-hover:bg-[#F2A93B]/[0.07] group-hover:text-[#F2A93B]/70">
-                        {icon}
-                      </div>
-                      <div>
-                        <p className="text-[14.5px] font-semibold text-paper transition-colors duration-200 group-hover:text-paper">{title}</p>
-                        <p className="mt-1 text-[13.5px] leading-[1.7] text-paper/40 transition-colors duration-200 group-hover:text-paper/55">{body}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+        <section className="px-6 md:px-10">
+          <div className="mx-auto grid max-w-7xl divide-y divide-paper/[0.08] border-y border-paper/[0.08] md:grid-cols-3 md:divide-x md:divide-y-0">
+            {[
+              { n: "Start a dialogue", d: "Get an outcome" },
+              { n: "Keep a record", d: "Won\u2019t forget the history" },
+              { n: "Passwordless sign-in", d: "One less thing to remember" },
+            ].map(({ n, d }, i) => (
+              <div key={n} style={{ animationDelay: `${i * 80}ms` }} className="lp-reveal py-8 md:px-10 md:first:pl-0 md:last:pr-0">
+                <p className="text-lg font-semibold tracking-tight text-paper">{n}</p>
+                <p className="mt-1 text-[13.5px] text-paper/45">{d}</p>
               </div>
+            ))}
+          </div>
+        </section>
 
-              <div className="flex flex-col gap-4">
-                <div className="rounded-2xl bg-white/[0.025] p-6 ring-1 ring-white/[0.05]">
-                  <p className="mb-4 text-[10.5px] font-semibold uppercase tracking-[0.17em] text-paper/25">Without Skylar</p>
-                  <ul className="space-y-3">
-                    {[
-                      "Re-read every email thread before each 1-on-1",
-                      "Forget what was said two weeks ago",
-                      "Handle sensitive situations blind to the risk level",
-                      "Build documentation from scratch every time",
-                      "Miss follow-ups when things fall off your radar",
-                    ].map((item) => (
-                      <li key={item} className="flex items-start gap-3 text-[13.5px] text-paper/30">
-                        <span className="mt-[7px] size-[5px] shrink-0 rounded-full bg-paper/20" aria-hidden="true" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+        {/* ══════════════════════════════════════════════════════════
+            PRODUCT — sticky intro, features as a ruled list
+        ══════════════════════════════════════════════════════════ */}
+        <section id="product" className="px-6 py-28 md:px-10 md:py-40">
+          <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-24">
+            <div className="lp-reveal self-start lg:sticky lg:top-32">
+              <p className="text-sm font-medium text-[#F2A93B]/80">What Skylar does</p>
+              <h2 className="mt-4 text-[2.5rem] font-semibold leading-[1.08] tracking-[-0.02em] text-paper md:text-5xl">
+                A thinking partner for HR questions that can&apos;t wait.
+              </h2>
+              <p className="mt-6 max-w-[46ch] text-[15.5px] leading-[1.8] text-paper/50">
+                Work through employee situations with Skylar AI, prepare what to say and keep a record you can return to. When you need human judgment, bring the question to a Skylar HR professional.
+              </p>
+            </div>
 
-                <div className="rounded-2xl bg-[#F2A93B]/[0.05] p-6 ring-1 ring-[#F2A93B]/[0.12]">
-                  <p className="mb-4 text-[10.5px] font-semibold uppercase tracking-[0.17em] text-[#F2A93B]/60">With Skylar</p>
-                  <ul className="space-y-3">
-                    {[
-                      "Open the briefing — every conversation already prepared",
-                      "Every thread continues where it ended",
-                      "High-risk situations flagged before you act",
-                      "Documentation drafted and filed in the same session",
-                      "Outstanding threads lead tomorrow's briefing automatically",
-                    ].map((item) => (
-                      <li key={item} className="flex items-start gap-3 text-[13.5px] text-paper/65">
-                        <CheckCircle2 className="mt-[1px] size-4 shrink-0 text-[#4CD07D]" aria-hidden="true" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+            <ul className="divide-y divide-paper/[0.08] border-y border-paper/[0.08]">
+              {[
+                { icon: <Zap className="size-[18px]" />, title: "What's the situation?", body: "Describe what is happening. Work through an approach, draft talking points and a record to review before you use it, in under five minutes." },
+                { icon: <Users className="size-[18px]" />, title: "Keep the context", body: "Saved notes and conversations with the relevant employee records come standard, so you can return to what was discussed." },
+                { icon: <ShieldAlert className="size-[18px]" />, title: "A person behind the guidance", body: "Skylar AI is a place to start. But when you need real human experience, bring your situation to a Skylar HR professional." },
+                { icon: <FileText className="size-[18px]" />, title: "A clear place to start", body: "Review open situations and upcoming follow-ups in one briefing. Start with the conversation that needs your attention." },
+              ].map(({ icon, title, body }, i) => (
+                <li key={title} style={{ animationDelay: `${i * 60}ms` }} className="lp-reveal group flex gap-6 py-9 md:gap-8">
+                  <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-paper/[0.04] text-paper/50 ring-1 ring-paper/[0.08] transition-colors duration-300 group-hover:bg-[#F2A93B]/[0.1] group-hover:text-[#F2A93B] group-hover:ring-[#F2A93B]/30">
+                    {icon}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold tracking-tight text-paper">{title}</h3>
+                    <p className="mt-2 max-w-[52ch] text-[14.5px] leading-[1.75] text-paper/50">{body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════════════════
+            BEFORE / AFTER — one panel, two sides
+        ══════════════════════════════════════════════════════════ */}
+        <section className="px-6 pb-28 md:px-10 md:pb-40">
+          <div className="lp-reveal mx-auto grid max-w-7xl overflow-hidden rounded-[28px] ring-1 ring-paper/[0.08] md:grid-cols-2">
+            <div className="bg-paper/[0.025] p-8 md:p-14">
+              <h3 className="text-2xl font-semibold tracking-tight text-paper/55 md:text-3xl">When you&apos;re handling it alone</h3>
+              <ul className="mt-8 space-y-4">
+                {[
+                  "Starting each conversation from scratch",
+                  "Searching notes for what you need",
+                  "Staring at a blank document",
+                  "Carrying the next step in your head",
+                ].map((item) => (
+                  <li key={item} className="text-[15px] text-paper/40 line-through decoration-paper/20 decoration-1">{item}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="relative bg-[#F2A93B]/[0.07] p-8 md:p-14">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(242,169,59,0.14),transparent_60%)]" />
+              <h3 className="relative text-2xl font-semibold tracking-tight text-paper md:text-3xl">With Skylar</h3>
+              <ul className="relative mt-8 space-y-4">
+                {[
+                  "Context you can return to",
+                  "A place for the employee record",
+                  "A draft to review and make your own",
+                  "A clearer view of open work",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-[15px] text-paper/80">
+                    <CheckCircle2 className="mt-0.5 size-[18px] shrink-0 text-[#F2A93B]" aria-hidden="true" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>
 
         {/* ══════════════════════════════════════════════════════════
-            HOW IT WORKS — no hard top border, gradient fade in
+            HOW IT WORKS — three ruled columns
         ══════════════════════════════════════════════════════════ */}
-        <section id="how-it-works" className="relative px-6 pb-32 pt-4 md:px-10 md:pb-40">
-          {/* Thin gradient line instead of border */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
-
+        <section id="how-it-works" className="px-6 pb-28 md:px-10 md:pb-40">
           <div className="mx-auto max-w-7xl">
-            <div className="mb-14 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#F2A93B]/65">How it works</p>
-                <h2 className="mt-4 text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-paper md:text-5xl">
-                  From first message
-                  <br />
-                  to filed plan in minutes.
-                </h2>
-              </div>
-              <Link href={SIGNUP_PATH} className="inline-flex items-center gap-1.5 text-sm text-paper/35 transition-colors duration-200 hover:text-paper">
-                Start free <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Link>
+            <div className="lp-reveal max-w-3xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#F2A93B]/70">How it works</p>
+              <h2 className="mt-4 text-[2.5rem] font-semibold leading-[1.08] tracking-[-0.02em] text-paper md:text-5xl">
+                A colleague to think with.<br className="hidden md:block" /> A professional to turn to.
+              </h2>
             </div>
 
-            <div className="grid md:grid-cols-3">
+            <div className="mt-16 grid gap-x-10 gap-y-12 md:grid-cols-3">
               {[
-                { n: "01", title: "Describe the situation", body: "Tell Skylar what's happening with one of your people. Two follow-up questions. One complete action plan — approach, script, documentation — saved to the employee's file." },
-                { n: "02", title: "Read your morning briefing", body: "Every morning Skylar orders your open threads by urgency and surfaces the single most important action. No dashboard, no scanning. Just what to do first." },
-                { n: "03", title: "Escalate when stakes are high", body: "Skylar flags legally sensitive situations and routes them to a named advisor with the full case history. Response within four business hours, tracked in your briefing." },
+                { n: "01", title: "Start with one situation", body: "Describe the employee situation in your own words. Work through the facts and a possible next step, with talking points and a record to review before you use it." },
+                { n: "02", title: "Read your daily briefing", body: "Skylar tracks next steps, urgency and reminders for you. Each morning your open threads are ordered so you know what to do first." },
+                { n: "03", title: "Get a person's perspective", body: "Bring in a human Skylar HR professional when you need human judgment. One free escalation is included in your trial." },
               ].map(({ n, title, body }, i) => (
-                <div key={n} className={`group relative px-8 py-10 transition-colors duration-300 hover:bg-white/[0.015] ${i > 0 ? "border-l border-white/[0.04]" : ""}`}>
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px scale-x-0 bg-gradient-to-r from-transparent via-[#F2A93B]/30 to-transparent transition-transform duration-500 group-hover:scale-x-100" />
-                  <p className="mb-6 font-mono text-[2.25rem] font-semibold leading-none text-paper/[0.06] transition-colors duration-300 group-hover:text-[#F2A93B]/15">{n}</p>
-                  <h3 className="text-[15.5px] font-semibold text-paper">{title}</h3>
-                  <p className="mt-2.5 text-[13.5px] leading-[1.8] text-paper/40 transition-colors duration-300 group-hover:text-paper/55">{body}</p>
+                <div key={n} style={{ animationDelay: `${i * 90}ms` }} className="lp-reveal group border-t border-paper/[0.12] pt-8 transition-colors duration-300 hover:border-[#F2A93B]/60">
+                  <p className="font-mono text-sm text-[#F2A93B]/80">{n}</p>
+                  <h3 className="mt-6 text-xl font-semibold tracking-tight text-paper">{title}</h3>
+                  <p className="mt-3 max-w-[44ch] text-[14.5px] leading-[1.75] text-paper/50">{body}</p>
                 </div>
               ))}
             </div>
+
+            <Link href={SIGNUP_PATH} className="lp-reveal mt-14 inline-flex items-center gap-2 text-sm font-medium text-paper/60 transition-all duration-200 hover:gap-3 hover:text-paper">
+              Try Skylar for 14 days <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
           </div>
         </section>
 
@@ -324,90 +291,90 @@ export default async function MarketingPage() {
             PRICING
         ══════════════════════════════════════════════════════════ */}
         <section id="pricing" className="relative px-6 pb-32 pt-4 md:px-10 md:pb-40">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-paper/[0.05] to-transparent" />
 
-          <div className="mx-auto max-w-5xl">
-            <div className="max-w-xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#F2A93B]/65">Pricing</p>
+          <div className="mx-auto max-w-7xl">
+            <div className="lp-reveal max-w-xl">
+              <p className="text-sm font-medium text-[#F2A93B]/80">A place to start</p>
               <h2 className="mt-5 text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-paper md:text-5xl">
-                Start free.
+                Meet your new
                 <br />
-                Stay if it works.
+                thinking partner.
               </h2>
               <p className="mt-5 text-[15.5px] leading-[1.8] text-paper/45">
-                Every workspace starts on Free. Upgrade when your team needs the advisor every day.
+                Try unlimited chat with Skylar AI for 14 days, with one free escalation to a human Skylar HR professional. No credit card required.
               </p>
             </div>
 
-            <div
-              className={`mt-14 grid gap-5 ${
-                packages.length >= 3 ? "lg:grid-cols-3 md:grid-cols-2" : packages.length === 2 ? "md:grid-cols-2" : "max-w-md"
-              }`}
-            >
-              {packages.map((pkg) => {
-                const price = formatPackagePrice(pkg);
-                const isFree = isFreePackage(pkg);
-                return (
-                  <div
-                    key={pkg.id}
-                    className={
-                      pkg.highlighted
-                        ? "relative flex flex-col rounded-3xl bg-[#F2A93B]/[0.06] p-8 ring-1 ring-[#F2A93B]/30 shadow-[0_24px_80px_rgba(242,169,59,0.08)]"
-                        : "flex flex-col rounded-3xl bg-white/[0.03] p-8 ring-1 ring-white/[0.08]"
-                    }
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className={pkg.highlighted ? "text-sm font-semibold text-paper" : "text-sm font-semibold text-paper/70"}>{pkg.name}</p>
-                      {pkg.badge && (
-                        <span className="rounded-full bg-[#F2A93B]/15 px-2.5 py-1 text-[11px] font-semibold text-[#F2A93B]">{pkg.badge}</span>
-                      )}
-                    </div>
-                    <div className="mt-4 flex items-baseline gap-1.5">
-                      <span className="text-[3rem] font-semibold leading-none text-paper">{price.amount}</span>
-                      <span className="text-sm text-paper/40">{price.period}</span>
-                    </div>
-                    {pkg.description && <p className="mt-2 text-[13.5px] leading-6 text-paper/45">{pkg.description}</p>}
+            <div className="mt-14 grid gap-5 md:grid-cols-2">
+              <div className="lp-reveal flex flex-col rounded-3xl bg-paper/[0.03] p-8 ring-1 ring-paper/[0.08] md:p-10">
+                <p className="text-sm font-semibold text-paper/70">Get to know Skylar</p>
+                <p className="mt-4 text-[2.75rem] font-semibold leading-none tracking-tight text-paper">14 days, free</p>
+                <p className="mt-3 text-[14px] leading-6 text-paper/50">Try Skylar with the questions on your desk.</p>
+                <ul className="mt-8 flex-1 space-y-3.5">
+                  {[
+                    "Ask Skylar AI as many questions as you need during your trial",
+                    "One free escalation to a human Skylar HR professional",
+                    "No credit card required",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-[14px] leading-5 text-paper/70">
+                      <CheckCircle2 className="mt-px size-4 shrink-0 text-paper/40" aria-hidden="true" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href={SIGNUP_PATH}
+                  className="mt-10 flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-paper/[0.07] text-sm font-semibold text-paper ring-1 ring-paper/[0.12] transition-colors hover:bg-paper/[0.12] active:scale-[0.98]"
+                >
+                  Begin your 14-day trial
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+              </div>
 
-                    <ul className="mt-7 flex-1 space-y-3">
-                      {displayFeatures(pkg).map((item) => (
-                        <li key={item} className="flex items-start gap-3 text-[13.5px] leading-5 text-paper/65">
-                          <CheckCircle2
-                            className={pkg.highlighted ? "mt-px size-4 shrink-0 text-[#F2A93B]" : "mt-px size-4 shrink-0 text-paper/35"}
-                            aria-hidden="true"
-                          />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-
-                    <Link
-                      href={SIGNUP_PATH}
-                      className={
-                        pkg.highlighted
-                          ? "mt-8 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-paper text-sm font-semibold text-[#0d0b09] transition-opacity hover:opacity-90"
-                          : "mt-8 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-white/[0.07] text-sm font-semibold text-paper ring-1 ring-white/[0.1] transition-colors hover:bg-white/[0.12]"
-                      }
-                    >
-                      {isFree ? "Start free" : `Start with ${pkg.name}`}
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                    </Link>
-                    <p className="mt-2.5 text-center text-[11px] text-paper/30">
-                      {isFree ? "No credit card required" : "Start free, upgrade in one click from Billing"}
-                    </p>
-                  </div>
-                );
-              })}
+              <div className="lp-reveal relative flex flex-col rounded-3xl bg-[#F2A93B]/[0.06] p-8 shadow-[0_24px_80px_rgba(242,169,59,0.08)] ring-1 ring-[#F2A93B]/30 md:p-10" style={{ animationDelay: "100ms" }}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-paper">Professional</p>
+                  <span className="rounded-full bg-[#F2A93B]/15 px-2.5 py-1 text-[11px] font-semibold text-[#F2A93B]">After your trial</span>
+                </div>
+                <p className="mt-4 flex items-baseline gap-1.5 text-paper">
+                  <span className="text-[2.75rem] font-semibold leading-none tracking-tight">$149</span>
+                  <span className="text-sm text-paper/45">/ month</span>
+                </p>
+                <p className="mt-3 text-[14px] leading-6 text-paper/55">Keep the conversation going. Make Skylar part of how you prepare for employee conversations and HR questions.</p>
+                <ul className="mt-8 flex-1 space-y-3.5">
+                  {[
+                    "Everything in your trial",
+                    "Secure checkout and invoices by Stripe",
+                    "Cancel any time from the billing portal",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-[14px] leading-5 text-paper/75">
+                      <CheckCircle2 className="mt-px size-4 shrink-0 text-[#F2A93B]" aria-hidden="true" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href={SIGNUP_PATH}
+                  className="mt-10 flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-paper text-sm font-semibold text-[#0d0b09] transition-opacity hover:opacity-90 active:scale-[0.98]"
+                >
+                  Choose Skylar
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+                <p className="mt-3 text-center text-[11px] text-paper/40">Start with the trial, upgrade when you are ready</p>
+              </div>
             </div>
 
-            <dl className="mt-14 grid gap-8 border-t border-white/[0.06] pt-10 md:grid-cols-3">
+            <dl className="lp-reveal mt-16 grid gap-x-16 gap-y-10 border-t border-paper/[0.08] pt-12 md:grid-cols-2">
               {[
                 { q: "Can I invite my team?", a: "Yes. Admins invite teammates from Settings, on any plan." },
-                { q: "What happens after the free messages?", a: "Everything else keeps working. Upgrade to keep chatting with the advisor. You are never charged unless you upgrade." },
+                { q: "What's included in the trial?", a: "Your 14-day free trial includes unlimited chat with Skylar AI and one free escalation to a human Skylar HR professional. No credit card required." },
+                { q: "Am I chatting with AI or a person?", a: "Chat with Skylar AI to work through your questions. Human support is a separate escalation to a Skylar HR professional; your 14-day trial includes one free escalation." },
                 { q: "Is my data private?", a: "Each workspace is fully isolated. Payments are handled by Stripe; we never see your card." },
               ].map(({ q, a }) => (
                 <div key={q}>
-                  <dt className="text-[13.5px] font-semibold text-paper/75">{q}</dt>
-                  <dd className="mt-1.5 text-[13px] leading-6 text-paper/40">{a}</dd>
+                  <dt className="text-[15px] font-semibold text-paper/85">{q}</dt>
+                  <dd className="mt-2 max-w-[52ch] text-[14px] leading-6 text-paper/50">{a}</dd>
                 </div>
               ))}
             </dl>
@@ -415,31 +382,29 @@ export default async function MarketingPage() {
         </section>
 
         {/* ══════════════════════════════════════════════════════════
-            FINAL CTA — amber wash, no hard top border
+            FINAL CTA — left aligned, button on the right
         ══════════════════════════════════════════════════════════ */}
-        <section className="relative px-6 pb-28 md:px-10 md:pb-36">
-          <div className="mx-auto max-w-7xl">
-            <div className="group relative overflow-hidden rounded-3xl bg-[#F2A93B]/[0.07] px-8 py-24 text-center ring-1 ring-[#F2A93B]/[0.10] transition-all duration-700 hover:bg-[#F2A93B]/[0.09] hover:ring-[#F2A93B]/[0.18] md:py-32">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_65%_at_50%_0%,rgba(242,169,59,0.14),transparent_65%)]" />
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_100%,rgba(242,169,59,0.06),transparent)]" />
-              <div className="relative">
-                <Image src="/brand/logo.png" alt="Skylar" width={48} height={48} className="mx-auto mb-7 opacity-85" />
-                <h2 className="text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-paper md:text-5xl lg:text-[3.5rem]">
-                  Walk into every day
-                  <br />
-                  already prepared.
+        <section className="px-6 pb-28 md:px-10 md:pb-36">
+          <div className="lp-reveal relative mx-auto max-w-7xl overflow-hidden rounded-[28px] bg-[#F2A93B]/[0.07] p-8 ring-1 ring-[#F2A93B]/[0.14] md:p-16">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_90%_at_0%_100%,rgba(242,169,59,0.16),transparent_65%)]" />
+            <div className="relative grid gap-10 md:grid-cols-[1fr_auto] md:items-end">
+              <div>
+                <h2 className="max-w-3xl text-[2.5rem] font-semibold leading-[1.08] tracking-[-0.02em] text-paper md:text-[3.5rem]">
+                  You don&apos;t need every answer. You need a thinking partner.
                 </h2>
-                <p className="mx-auto mt-5 max-w-[380px] text-[15.5px] leading-[1.8] text-paper/45">
-                  No setup. No configuration. Tell Skylar what&apos;s going on and your first briefing is ready in minutes.
+                <p className="mt-5 max-w-[52ch] text-[15.5px] leading-[1.8] text-paper/55">
+                  Bring the question on your mind. Work through a useful next step with Skylar AI, with human HR support available through escalation.
                 </p>
+              </div>
+              <div className="md:text-right">
                 <Link
                   href={SIGNUP_PATH}
-                  className="mt-9 inline-flex h-11 items-center gap-2 rounded-full bg-paper px-10 text-sm font-semibold text-[#0d0b09] shadow-[0_4px_24px_rgba(244,239,231,0.18)] transition-all hover:opacity-90"
+                  className="group inline-flex h-12 items-center gap-2 whitespace-nowrap rounded-full bg-paper px-8 text-sm font-semibold text-[#0d0b09] transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  Start free
-                  <ArrowRight className="size-4" aria-hidden="true" />
+                  Try Skylar for 14 days
+                  <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
                 </Link>
-                <p className="mt-3 text-xs text-paper/25">No credit card required</p>
+                <p className="mt-3 text-xs text-paper/40">No credit card required</p>
               </div>
             </div>
           </div>
@@ -457,9 +422,9 @@ export default async function MarketingPage() {
             </Link>
             <nav className="flex flex-wrap gap-5" aria-label="Footer">
               {[
-                { href: "#product", label: "Product" },
+                { href: "#product", label: "Explore the product" },
                 { href: "#how-it-works", label: "How it works" },
-                { href: "#pricing", label: "Pricing" },
+                { href: "#pricing", label: "Plans" },
                 { href: LOGIN_PATH, label: "Sign in", external: false },
                 { href: TERMS_PATH, label: "Terms", external: false },
                 { href: PRIVACY_PATH, label: "Privacy", external: false },
@@ -470,7 +435,7 @@ export default async function MarketingPage() {
               ))}
             </nav>
           </div>
-          <div className="mt-8 h-px bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
+          <div className="mt-8 h-px bg-gradient-to-r from-transparent via-paper/[0.05] to-transparent" />
           <p className="mt-5 text-[12px] text-paper/18">© {new Date().getFullYear()} Skylar HR. All rights reserved.</p>
         </div>
       </footer>
