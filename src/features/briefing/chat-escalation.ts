@@ -3,6 +3,7 @@ export type ChatEscalationOutcome =
   | { kind: "escalated"; reason: string; caseId: string; escalationId?: string }
   | { kind: "offer"; reason: string }
   | { kind: "needs_employee"; reason: string }
+  | { kind: "allowance_used"; reason: string; limit: number; plan: "free" | "paid" }
   | { kind: "failed"; reason: string };
 
 /** What the chat screen needs to show an escalation card. */
@@ -18,6 +19,7 @@ export function toEscalationEvent(outcome: ChatEscalationOutcome): EscalationEve
   switch (outcome.kind) {
     case "none":
     case "offer":
+    case "allowance_used":
       return null;
     case "escalated":
       return { kind: "escalated", reason: outcome.reason, caseId: outcome.caseId, escalationId: outcome.escalationId };
@@ -41,6 +43,10 @@ export function buildEscalationNotice(outcome: ChatEscalationOutcome): string | 
       return `SYSTEM NOTICE: This request may need a human HR advisor (${outcome.reason}), but nothing has been escalated. The manager is being shown a "Connect me to an HR advisor" button. If this is not a high alert, answer as usual and mention the button in one short sentence. If it is a high alert, do not advise on it; tell them to use the button.`;
     case "needs_employee":
       return `SYSTEM NOTICE: This request matched a high-risk rule (${outcome.reason}) but no employee is selected, so it has not been escalated. Tell the manager this is a high alert you cannot advise on, and ask them to select the employee so it can be escalated.`;
+    case "allowance_used":
+      return outcome.plan === "paid"
+        ? `SYSTEM NOTICE: The manager asked for a human HR advisor, but this workspace has used its ${outcome.limit} included human escalations for this month, so nothing was escalated. Tell them plainly that the monthly allowance is used and renews next month, and offer to keep working through it with them. If it is a high alert, do not advise on it.`
+        : `SYSTEM NOTICE: The manager asked for a human HR advisor, but this workspace has already used its ${outcome.limit} free escalation, so nothing was escalated. Tell them plainly that the free escalation is used and that human HR support continues when they upgrade in Billing, and offer to keep working through it with them. If it is a high alert, do not advise on it.`;
     case "failed":
       return `SYSTEM NOTICE: This request matched a high-risk rule (${outcome.reason}) but the escalation could not be created. Tell the manager this is a high alert you cannot advise on, that it was NOT escalated, and that they should use "Hold to escalate" on the employee's brief.`;
   }

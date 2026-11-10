@@ -45,10 +45,6 @@ export function toPackageInput(
   if (!isFree && priceCents < MIN_PAID_PRICE_CENTS) {
     return { ok: false, message: "Paid packages must cost at least $0.50. The Free package is the only $0 package." };
   }
-  if (isFree && payload.advisorMessageLimit === null) {
-    return { ok: false, message: "Set how many advisor messages the Free package includes." };
-  }
-
   return {
     ok: true,
     input: {

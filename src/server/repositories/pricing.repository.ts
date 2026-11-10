@@ -101,10 +101,11 @@ export async function getPackage(id: string): Promise<PricingPackage | null> {
   return snapshot.exists ? packageFromDoc(snapshot) : null;
 }
 
-/** The Free package's allowance, falling back to the built-in default if it was never configured. */
-export async function getFreeMessageLimit(): Promise<number> {
+/** The Free package's allowance: null when it is unlimited, the built-in default if it was never configured. */
+export async function getFreeMessageLimit(): Promise<number | null> {
   const snapshot = await adminDb().collection(PACKAGES_COLLECTION).doc(FREE_PACKAGE_ID).get();
-  const limit = snapshot.exists ? snapshot.get("advisorMessageLimit") : null;
+  const limit = snapshot.exists ? snapshot.get("advisorMessageLimit") : undefined;
+  if (limit === null) return null;
   return typeof limit === "number" ? limit : FREE_MESSAGE_LIMIT;
 }
 

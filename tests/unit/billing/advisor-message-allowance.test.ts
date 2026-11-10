@@ -39,6 +39,7 @@ vi.mock("@/lib/firebase/admin", () => ({
         get: async (ref: { id: string }) => ({
           exists: store.has(ref.id),
           data: () => store.get(ref.id),
+          get: (key: string) => store.get(ref.id)?.[key],
         }),
         set: (ref: { id: string }, data: Doc) => applyWrite(ref.id, data),
       }),
@@ -70,6 +71,14 @@ describe("reserveAdvisorMessage", () => {
 
     await expect(reserveAdvisorMessage(session)).rejects.toBeInstanceOf(PaymentRequiredError);
     expect(store.get("acme")?.freeMessagesUsed).toBe(5);
+  });
+
+  it("never counts out a free workspace when the Free package is unlimited, until the trial ends", async () => {
+    store.set("free", { advisorMessageLimit: null });
+    store.set("acme", { status: "free", freeMessagesUsed: 500 });
+
+    await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "free" });
+    expect(store.get("acme")?.freeMessagesUsed).toBe(501);
   });
 
   it("answers with a 402 payment_required error", async () => {

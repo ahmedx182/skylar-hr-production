@@ -47,7 +47,9 @@ export default async function PlatformOverviewPage({
     listPackages({ includeArchived: true }),
   ]);
   const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const freeLimit = packageById.get(FREE_PACKAGE_ID)?.advisorMessageLimit ?? FREE_MESSAGE_LIMIT;
+  const freePackage = packageById.get(FREE_PACKAGE_ID);
+  // null means unlimited trial chat, so nobody hits a limit.
+  const freeLimit = freePackage ? freePackage.advisorMessageLimit : FREE_MESSAGE_LIMIT;
   // Subscriptions from before packages existed have no package recorded; they were all on the first paid package.
   const legacyPaid = packages.find((pkg) => pkg.priceCents > 0 && !pkg.archived) ?? packages.find((pkg) => pkg.priceCents > 0);
 
@@ -74,7 +76,7 @@ export default async function PlatformOverviewPage({
   const activeInRange = rows.filter((row) => activeCompanyIds.has(row.id)).length;
   const recordsInRange = activity.reduce((sum, point) => sum + point.records, 0);
   const upgradeLeads = rows.filter(
-    (row) => row.status === "active" && row.plan === "free" && row.freeMessagesUsed >= freeLimit,
+    (row) => row.status === "active" && row.plan === "free" && freeLimit !== null && row.freeMessagesUsed >= freeLimit,
   );
   const withOpenCases = rows.filter((row) => row.openEscalations > 0);
   const mostActive = [...rows].sort((a, b) => b.recordCount - a.recordCount).filter((row) => row.recordCount > 0).slice(0, 5);
@@ -167,7 +169,7 @@ export default async function PlatformOverviewPage({
               {
                 label: "Out of free messages (upgrade leads)",
                 rows: upgradeLeads,
-                note: (row) => `${row.freeMessagesUsed} of ${freeLimit} used`,
+                note: (row) => `${row.freeMessagesUsed} of ${freeLimit ?? "unlimited"} used`,
               },
               {
                 label: "Open advisor escalations",

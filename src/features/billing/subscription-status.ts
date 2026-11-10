@@ -68,9 +68,9 @@ export type CompanyBillingState = {
   gift: PlanGift | null;
   giftActive: boolean;
   freeMessagesUsed: number;
-  /** The Free package's allowance when this state was read. */
-  freeMessageLimit: number;
-  freeMessagesRemaining: number;
+  /** The Free package's allowance when this state was read. null means unlimited during the trial. */
+  freeMessageLimit: number | null;
+  freeMessagesRemaining: number | null;
   trialEndsAtMs: number | null;
   currentPeriodEndMs: number | null;
   stripeCustomerId: string | null;
@@ -97,8 +97,8 @@ export function billingPlanForState(
   return "free";
 }
 
-export function freeMessagesRemaining(used: number, limit = FREE_MESSAGE_LIMIT): number {
-  return Math.max(0, limit - used);
+export function freeMessagesRemaining(used: number, limit: number | null = FREE_MESSAGE_LIMIT): number | null {
+  return limit === null ? null : Math.max(0, limit - used);
 }
 
 export function normalizeBillingStatus(value: unknown): BillingStatus {

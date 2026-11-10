@@ -7,6 +7,13 @@ const mocks = vi.hoisted(() => ({
   findLiveCaseForEmployee: vi.fn(),
   reopenUserLiveCase: vi.fn(),
   sendUserLiveMessage: vi.fn(),
+  reserveEscalation: vi.fn(),
+  releaseEscalation: vi.fn(),
+}));
+
+vi.mock("@/server/repositories/billing.repository", () => ({
+  reserveEscalation: mocks.reserveEscalation,
+  releaseEscalation: mocks.releaseEscalation,
 }));
 
 vi.mock("@/server/repositories/advisor-live.repository", () => ({
@@ -37,6 +44,8 @@ describe("escalateFromChat", () => {
     mocks.createAdvisorEscalationFromLedger.mockResolvedValue({ id: "ledger_L1", caseId: "CASE-9" });
     mocks.classifyEscalation.mockResolvedValue(null);
     mocks.findLiveCaseForEmployee.mockResolvedValue(null);
+    mocks.reserveEscalation.mockResolvedValue({ allowed: true, counter: "lifetime" });
+    mocks.releaseEscalation.mockResolvedValue(undefined);
   });
 
   it("does nothing for a message that is not high risk", async () => {
@@ -162,5 +171,33 @@ describe("escalateFromChat", () => {
     mocks.findLiveCaseForEmployee.mockResolvedValue({ id: "esc-open", caseId: "ADV-OPEN", isOpen: true, closedAtMs: null });
     await escalateFromChat(session, { prompt: riskyPrompt, employeeId: "e1", allowReopen: true });
     expect(mocks.reopenUserLiveCase).not.toHaveBeenCalled();
+  });
+
+  describe("escalation allowance", () => {
+    const used = { allowed: false, limit: 1, plan: "free" } as const;
+
+    it("refuses a manager's own request for a person once the allowance is spent", async () => {
+      mocks.reserveEscalation.mockResolvedValue(used);
+      const outcome = await escalateFromChat(session, { prompt: "I want to talk to an HR advisor", employeeId: "e1", enforceAllowance: true });
+
+      expect(mocks.reserveEscalation).toHaveBeenCalledWith(session, { enforce: true });
+      expect(outcome).toEqual({ kind: "allowance_used", reason: expect.any(String), limit: 1, plan: "free" });
+      expect(mocks.createAdvisorEscalationFromLedger).not.toHaveBeenCalled();
+    });
+
+    it("never holds back a high-risk matter the system detected, but still counts it", async () => {
+      const outcome = await escalateFromChat(session, { prompt: riskyPrompt, employeeId: "e1", enforceAllowance: true });
+
+      expect(mocks.reserveEscalation).toHaveBeenCalledWith(session, { enforce: false });
+      expect(outcome).toMatchObject({ kind: "escalated" });
+    });
+
+    it("gives the allowance back when the case could not be created", async () => {
+      mocks.createAdvisorEscalationFromLedger.mockRejectedValue(new Error("boom"));
+      const outcome = await escalateFromChat(session, { prompt: riskyPrompt, employeeId: "e1", enforceAllowance: true });
+
+      expect(mocks.releaseEscalation).toHaveBeenCalledWith(session, "lifetime");
+      expect(outcome).toMatchObject({ kind: "failed" });
+    });
   });
 });

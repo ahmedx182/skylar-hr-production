@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     // Managers: high-risk messages are escalated server-side and the bot is told what happened.
     const escalation: ChatEscalationOutcome = isEmployee
       ? { kind: "none" }
-      : await escalateFromChat(session, { prompt: input.prompt, employeeId: input.employeeId, history, liveEnabled: env.LIVE_ADVISOR_ENABLED, allowReopen: env.ADVISOR_ALLOW_REOPEN });
+      : await escalateFromChat(session, { prompt: input.prompt, employeeId: input.employeeId, history, liveEnabled: env.LIVE_ADVISOR_ENABLED, allowReopen: env.ADVISOR_ALLOW_REOPEN, enforceAllowance: !env.DEMO_DISABLE_PAYMENT_GATE });
     // A new escalation moves the chat to a person: one fixed message and no AI answer. The message that triggered it
     // was sent to a human, so it counts.
     if (env.LIVE_ADVISOR_ENABLED && escalation.kind === "escalated") {

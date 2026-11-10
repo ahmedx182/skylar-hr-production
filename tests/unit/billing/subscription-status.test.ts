@@ -48,6 +48,7 @@ describe("freeMessagesRemaining", () => {
     expect(freeMessagesRemaining(4)).toBe(1);
     expect(freeMessagesRemaining(5)).toBe(0);
     expect(freeMessagesRemaining(9)).toBe(0);
+    expect(freeMessagesRemaining(9, null)).toBeNull();
   });
 });
 
