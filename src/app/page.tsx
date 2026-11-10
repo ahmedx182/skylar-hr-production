@@ -62,7 +62,7 @@ export default async function MarketingPage() {
                 </p>
 
                 <h1 className="lp-fade-up lp-d-100 text-[2.75rem] font-semibold leading-[1.07] tracking-[-0.025em] text-paper md:text-[3.5rem] lg:text-[3.75rem]">
-                  <span className="whitespace-nowrap">Less second-guessing.</span>
+                  <span className="md:whitespace-nowrap">Less second-guessing.</span>
                   <br />
                   <span className="text-paper/35">Clear next steps.</span>
                 </h1>
