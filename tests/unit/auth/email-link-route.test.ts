@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   findPendingInviteByEmail: vi.fn(),
   generateSignInWithEmailLink: vi.fn(),
   sendSignInEmail: vi.fn(),
+  isHrAdvisorEmail: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -16,6 +17,7 @@ vi.mock("@/server/repositories/user.repository", () => ({
   findActiveUserByEmail: mocks.findActiveUserByEmail,
 }));
 vi.mock("@/server/repositories/invite.repository", () => ({ findPendingInviteByEmail: mocks.findPendingInviteByEmail }));
+vi.mock("@/server/auth/hr-advisor-email", () => ({ isHrAdvisorEmail: mocks.isHrAdvisorEmail }));
 vi.mock("@/server/email/sign-in-link-email", () => ({ sendSignInEmail: mocks.sendSignInEmail }));
 
 import { POST } from "@/app/api/auth/email-link/route";
@@ -40,6 +42,7 @@ beforeEach(() => {
   mocks.findAccountBlockByEmail.mockResolvedValue(null);
   mocks.findActiveUserByEmail.mockResolvedValue({ role: "admin", companyId: "acme" });
   mocks.findPendingInviteByEmail.mockResolvedValue(null);
+  mocks.isHrAdvisorEmail.mockResolvedValue(false);
   mocks.generateSignInWithEmailLink.mockResolvedValue("https://app.example.com/verify?oob=1");
   mocks.sendSignInEmail.mockResolvedValue(true);
 });
@@ -78,5 +81,31 @@ describe("POST /api/auth/email-link for blocked accounts", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ delivery: "sent" });
     expect(mocks.sendSignInEmail).toHaveBeenCalledWith(expect.objectContaining({ toEmail: email, purpose: "login" }));
+  });
+});
+
+describe("POST /api/auth/email-link for emails with no account", () => {
+  beforeEach(() => mocks.findActiveUserByEmail.mockResolvedValue(null));
+
+  it("sends a sign-in link to an HR advisor a super admin added, before they have any account", async () => {
+    mocks.isHrAdvisorEmail.mockResolvedValue(true);
+    const { request, email } = post({ purpose: "login" });
+
+    expect((await POST(request)).status).toBe(200);
+    expect(mocks.isHrAdvisorEmail).toHaveBeenCalledWith(email, true);
+    expect(mocks.sendSignInEmail).toHaveBeenCalled();
+  });
+
+  it("still refuses an email that is not a user, an invitee or an HR advisor", async () => {
+    const { request } = post({ purpose: "login" });
+
+    expect((await POST(request)).status).toBe(403);
+    expect(mocks.sendSignInEmail).not.toHaveBeenCalled();
+  });
+
+  it("doesn't look for an HR grant when there is already an invite", async () => {
+    mocks.findPendingInviteByEmail.mockResolvedValue({ id: "inv", companyId: "acme" });
+    expect((await POST(post({ purpose: "login" }).request)).status).toBe(200);
+    expect(mocks.isHrAdvisorEmail).not.toHaveBeenCalled();
   });
 });

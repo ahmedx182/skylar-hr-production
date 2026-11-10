@@ -1,7 +1,7 @@
 import "server-only";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase/admin";
-import { isSoftDeleted } from "./soft-delete";
+import { isSoftDeleted, stageAdvisorCaseRemoval } from "./soft-delete";
 
 const EMPLOYEES = "employees";
 const LEDGER = "employee_ledger_entries";
@@ -111,6 +111,8 @@ export async function purgeExpiredRecords({ now = Date.now(), limit = 200 } = {}
       const entries = await db.collection(LEDGER).where("companyId", "==", companyId).where("employeeId", "==", doc.id).get();
       notesRemovedWithEmployees += entries.size;
       entries.docs.forEach((entry) => void writer.delete(entry.ref));
+      const cases = await db.collection("advisor_escalations").where("companyId", "==", companyId).where("employeeId", "==", doc.id).get();
+      for (const item of cases.docs) await stageAdvisorCaseRemoval(writer, item.ref);
     }
     void writer.delete(doc.ref);
   }

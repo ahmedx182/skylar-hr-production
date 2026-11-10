@@ -335,7 +335,7 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
                       inputMode="numeric"
                       className={cn(inputClass, "sm:max-w-40")}
                     />
-                    <span className="text-[11px] font-normal text-paper-3">Applies to every free workspace straight away, including ones that already used some.</span>
+                    <span className="text-[11px] font-normal text-paper-3">Leave blank for unlimited chat during the free trial. A number applies to every free workspace straight away, including ones that already used some.</span>
                   </label>
                 )}
 
@@ -419,7 +419,7 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
                 <p className="mt-1 text-sm text-paper-2">
                   <span className="font-semibold text-paper">{price.amount}</span> {price.period}
                   <span className="mx-2 text-paper/20">|</span>
-                  {isFree ? `${pkg.advisorMessageLimit ?? 0} free advisor messages` : "Unlimited advisor messages"}
+                  {isFree ? (pkg.advisorMessageLimit === null ? "Unlimited trial chat" : `${pkg.advisorMessageLimit} free advisor messages`) : "Unlimited advisor messages"}
                   <span className="mx-2 text-paper/20">|</span>
                   {pkg.features.length} features
                 </p>

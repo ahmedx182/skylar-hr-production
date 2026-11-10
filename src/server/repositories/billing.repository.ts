@@ -8,14 +8,18 @@ import {
   isGiftActive,
   normalizeBillingStatus,
   planGiftFrom,
+  type BillingPlan,
   type BillingStatus,
   type CompanyBillingState,
 } from "@/features/billing/subscription-status";
+import { escalationAllowanceFor, escalationPeriodKey, escalationUsageFrom, type EscalationAllowance } from "@/features/billing/escalation-allowance";
 import { FREE_PACKAGE_ID } from "@/features/pricing/package";
 import { NotFoundError, PaymentRequiredError } from "@/lib/errors";
 import { adminDb } from "@/lib/firebase/admin";
 import type { AuthSession } from "@/types/auth";
+import { freeTrialFor, type FreeTrial } from "@/features/advisor/trial";
 import { getFreeMessageLimit } from "./pricing.repository";
+import { getAdvisorSettings } from "./platform-settings.repository";
 
 const COMPANIES_COLLECTION = "companies";
 const SUBSCRIPTIONS_COLLECTION = "subscriptions";
@@ -33,7 +37,7 @@ function timestampFromSeconds(value: number | null | undefined) {
   return typeof value === "number" ? Timestamp.fromMillis(value * 1000) : null;
 }
 
-function stateFromData(companyId: string, data: DocumentData, freeMessageLimit = FREE_MESSAGE_LIMIT): CompanyBillingState {
+function stateFromData(companyId: string, data: DocumentData, freeMessageLimit: number | null = FREE_MESSAGE_LIMIT): CompanyBillingState {
   const status = normalizeBillingStatus(data.status);
   const trialEndsAtMs = timestampMs(data.trialEndsAt);
   const freeMessagesUsed =
@@ -228,13 +232,20 @@ export async function reserveAdvisorMessage(
 ): Promise<AdvisorAllowance> {
   const db = adminDb();
   const subscriptionRef = db.collection(SUBSCRIPTIONS_COLLECTION).doc(session.companyId);
+  const companyRef = db.collection(COMPANIES_COLLECTION).doc(session.companyId);
 
   const freePackageRef = db.collection("pricing_packages").doc(FREE_PACKAGE_ID);
+  const { freeTrialDays } = await getAdvisorSettings();
 
   return db.runTransaction(async (transaction) => {
-    const [snapshot, freePackage] = await Promise.all([transaction.get(subscriptionRef), transaction.get(freePackageRef)]);
+    const [snapshot, freePackage, company] = await Promise.all([
+      transaction.get(subscriptionRef),
+      transaction.get(freePackageRef),
+      transaction.get(companyRef),
+    ]);
     const configuredLimit = freePackage.exists ? freePackage.get("advisorMessageLimit") : null;
-    const limit = typeof configuredLimit === "number" ? configuredLimit : FREE_MESSAGE_LIMIT;
+    // An explicit null on the Free package means unlimited chat during the trial; a missing value falls back to the default.
+    const limit = freePackage.exists && configuredLimit === null ? null : typeof configuredLimit === "number" ? configuredLimit : FREE_MESSAGE_LIMIT;
     const data = snapshot.exists ? (snapshot.data() ?? {}) : {};
     const state = stateFromData(session.companyId, snapshot.exists ? data : { status: "free" }, limit);
     const paidWithoutGift =
@@ -250,7 +261,13 @@ export async function reserveAdvisorMessage(
       return { reserved: true, counter: "gift" };
     }
 
-    if (state.freeMessagesUsed >= limit) {
+    // Free use lasts for the trial (14 days by default, set by a super admin), counted from when the workspace was created.
+    const trial = freeTrialFor(timestampMs(company.exists ? company.data()?.createdAt : null), freeTrialDays);
+    if (trial.expired) {
+      throw new PaymentRequiredError(`Your ${trial.days}-day free trial has ended. Upgrade in Billing to keep chatting.`);
+    }
+
+    if (limit !== null && state.freeMessagesUsed >= limit) {
       throw new PaymentRequiredError(
         `You've used all ${limit} free advisor messages. Upgrade in Billing to keep chatting.`,
       );
@@ -279,4 +296,55 @@ export async function releaseAdvisorMessage(
     .collection(SUBSCRIPTIONS_COLLECTION)
     .doc(session.companyId)
     .set({ [counter === "gift" ? "giftMessagesUsed" : "freeMessagesUsed"]: FieldValue.increment(-1) }, { merge: true });
+}
+
+/** Where a workspace stands in its free trial, for the Billing page. */
+export async function getFreeTrialForCompany(companyId: string): Promise<FreeTrial> {
+  const [company, { freeTrialDays }] = await Promise.all([adminDb().collection(COMPANIES_COLLECTION).doc(companyId).get(), getAdvisorSettings()]);
+  return freeTrialFor(timestampMs(company.exists ? company.data()?.createdAt : null), freeTrialDays);
+}
+
+export type EscalationReservation = { allowed: true; counter: "lifetime" | "monthly" } | { allowed: false; limit: number; plan: BillingPlan };
+
+/**
+ * Counts one human escalation against the workspace's allowance (one for the trial, three a month once paid).
+ * With `enforce` off the escalation is only counted, never refused: a high-risk matter the system detected must reach
+ * a person even when the allowance is spent. Counters are bumped in a transaction so concurrent requests can't overshoot.
+ */
+export async function reserveEscalation(session: Pick<AuthSession, "companyId">, options: { enforce: boolean }): Promise<EscalationReservation> {
+  const subscriptionRef = adminDb().collection(SUBSCRIPTIONS_COLLECTION).doc(session.companyId);
+  return adminDb().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(subscriptionRef);
+    const data = snapshot.exists ? (snapshot.data() ?? {}) : {};
+    const state = stateFromData(session.companyId, snapshot.exists ? data : { status: "free" });
+    const nowMs = Date.now();
+    const allowance = escalationAllowanceFor(state.plan, escalationUsageFrom(data), nowMs);
+    if (options.enforce && allowance.remaining <= 0) return { allowed: false, limit: allowance.limit, plan: state.plan };
+
+    const base = { companyId: session.companyId, ...(snapshot.exists ? {} : { status: "free" }), updatedAt: FieldValue.serverTimestamp() };
+    transaction.set(
+      subscriptionRef,
+      allowance.counter === "monthly"
+        ? { ...base, escalationPeriodKey: escalationPeriodKey(nowMs), escalationsUsedThisMonth: allowance.used + 1 }
+        : { ...base, escalationsUsed: FieldValue.increment(1) },
+      { merge: true },
+    );
+    return { allowed: true, counter: allowance.counter };
+  });
+}
+
+/** Gives back an escalation that was counted but never created. */
+export async function releaseEscalation(session: Pick<AuthSession, "companyId">, counter: "lifetime" | "monthly"): Promise<void> {
+  await adminDb()
+    .collection(SUBSCRIPTIONS_COLLECTION)
+    .doc(session.companyId)
+    .set({ [counter === "monthly" ? "escalationsUsedThisMonth" : "escalationsUsed"]: FieldValue.increment(-1) }, { merge: true });
+}
+
+/** What a workspace has left of its human escalations, for the Billing page. */
+export async function getEscalationAllowanceForCompany(session: Pick<AuthSession, "companyId">): Promise<EscalationAllowance> {
+  const snapshot = await adminDb().collection(SUBSCRIPTIONS_COLLECTION).doc(session.companyId).get();
+  const data = snapshot.exists ? (snapshot.data() ?? {}) : {};
+  const state = stateFromData(session.companyId, snapshot.exists ? data : { status: "free" });
+  return escalationAllowanceFor(state.plan, escalationUsageFrom(data));
 }

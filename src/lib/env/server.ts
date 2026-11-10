@@ -39,12 +39,36 @@ const serverEnvSchema = z.object({
     .transform((key) => key.replace(/\\n/g, "\n")),
   ANTHROPIC_API_KEY: optionalNonEmptyString,
   ANTHROPIC_MODEL: z.string().min(1).default("claude-haiku-4-5-20251001"),
+  /** The small model that decides whether a chat message needs a human advisor. */
+  ANTHROPIC_CLASSIFIER_MODEL: z.string().min(1).default("claude-haiku-4-5"),
   ANTHROPIC_PROMPT_CACHE_TTL: optionalPromptCacheTtl,
   AI_MAX_OUTPUT_TOKENS: optionalPositiveInt(600),
   AI_RATE_LIMIT_MAX_REQUESTS: optionalPositiveInt(20),
   AI_RATE_LIMIT_WINDOW_MS: optionalPositiveInt(60_000),
   AI_RESPONSE_CACHE_TTL_MS: optionalPositiveInt(300_000),
   DEMO_DISABLE_PAYMENT_GATE: optionalBoolean,
+  /**
+   * Whether a manager may reopen a closed HR chat. Off by default: Skylar's answer is that they start a new one.
+   * Turn it on to let them continue the same case instead.
+   */
+  ADVISOR_ALLOW_REOPEN: optionalBoolean,
+  /** Kill switch for live HR advisor chat. Anything but "false" leaves it on. */
+  LIVE_ADVISOR_ENABLED: z.preprocess((value) => value !== "false", z.boolean()),
+  /** Working hours are Monday to Friday, 9 to 5, in this time zone. They decide whether the wait is "up to an hour" or "up to 6 hours". */
+  ADVISOR_BUSINESS_TIMEZONE: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z
+      .string()
+      .default("America/New_York")
+      .refine((zone) => {
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone: zone });
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Must be an IANA time zone, such as America/New_York."),
+  ),
   STRIPE_SECRET_KEY: optionalNonEmptyString,
   STRIPE_WEBHOOK_SECRET: optionalNonEmptyString,
   STRIPE_PRICE_ID: optionalNonEmptyString,

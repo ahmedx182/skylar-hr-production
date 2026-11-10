@@ -39,11 +39,15 @@ vi.mock("@/lib/firebase/admin", () => ({
         get: async (ref: { id: string }) => ({
           exists: store.has(ref.id),
           data: () => store.get(ref.id),
+          get: (key: string) => store.get(ref.id)?.[key],
         }),
         set: (ref: { id: string }, data: Doc) => applyWrite(ref.id, data),
       }),
   }),
 }));
+
+const trial = vi.hoisted(() => ({ days: 14 }));
+vi.mock("@/server/repositories/platform-settings.repository", () => ({ getAdvisorSettings: async () => ({ hours: {}, freeTrialDays: trial.days }) }));
 
 import { PaymentRequiredError } from "@/lib/errors";
 import {
@@ -54,7 +58,10 @@ import {
 const session = { companyId: "acme" };
 
 describe("reserveAdvisorMessage", () => {
-  beforeEach(() => store.clear());
+  beforeEach(() => {
+    store.clear();
+    trial.days = 14;
+  });
 
   it("lets a brand-new workspace send five messages, then asks for payment", async () => {
     for (let sent = 1; sent <= 5; sent += 1) {
@@ -64,6 +71,14 @@ describe("reserveAdvisorMessage", () => {
 
     await expect(reserveAdvisorMessage(session)).rejects.toBeInstanceOf(PaymentRequiredError);
     expect(store.get("acme")?.freeMessagesUsed).toBe(5);
+  });
+
+  it("never counts out a free workspace when the Free package is unlimited, until the trial ends", async () => {
+    store.set("free", { advisorMessageLimit: null });
+    store.set("acme", { status: "free", freeMessagesUsed: 500 });
+
+    await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "free" });
+    expect(store.get("acme")?.freeMessagesUsed).toBe(501);
   });
 
   it("answers with a 402 payment_required error", async () => {
@@ -144,5 +159,59 @@ describe("gifted access", () => {
     await releaseAdvisorMessage(session, allowance.reserved ? allowance.counter : undefined);
 
     expect(store.get("acme")).toMatchObject({ giftMessagesUsed: 0, freeMessagesUsed: 5 });
+  });
+
+  describe("the free trial", () => {
+    const DAY = 86_400_000;
+    const createdDaysAgo = (days: number) => ({ toMillis: () => Date.now() - days * DAY });
+    // This fake keeps every document under its id, so the workspace and its subscription share one entry.
+    const workspace = (extra: Record<string, unknown>) => store.set("acme", { status: "free", freeMessagesUsed: 0, ...extra });
+
+    it("lets a workspace use its free messages during the 14 days", async () => {
+      workspace({ createdAt: createdDaysAgo(13) });
+      await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "free" });
+    });
+
+    it("stops after day 14, even with messages left, and says why", async () => {
+      workspace({ createdAt: createdDaysAgo(15), freeMessagesUsed: 1 });
+      await expect(reserveAdvisorMessage(session)).rejects.toMatchObject({ status: 402, code: "payment_required", message: expect.stringContaining("14-day free trial has ended") });
+      expect(store.get("acme")?.freeMessagesUsed).toBe(1);
+    });
+
+    it("follows a longer or shorter trial that was set", async () => {
+      trial.days = 30;
+      workspace({ createdAt: createdDaysAgo(20) });
+      await expect(reserveAdvisorMessage(session)).resolves.toMatchObject({ reserved: true });
+      trial.days = 7;
+      await expect(reserveAdvisorMessage(session)).rejects.toMatchObject({ message: expect.stringContaining("7-day free trial has ended") });
+    });
+
+    it("has no time limit when the trial is set to 0 days", async () => {
+      trial.days = 0;
+      workspace({ createdAt: createdDaysAgo(500) });
+      await expect(reserveAdvisorMessage(session)).resolves.toMatchObject({ reserved: true });
+    });
+
+    it("does not lock out a workspace with no start date", async () => {
+      workspace({});
+      await expect(reserveAdvisorMessage(session)).resolves.toMatchObject({ reserved: true });
+    });
+
+    it("never applies to a paid workspace", async () => {
+      workspace({ status: "active", createdAt: createdDaysAgo(500) });
+      await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: false });
+    });
+
+    it("never applies to a workspace on gifted or granted paid access", async () => {
+      workspace({ planOverride: "paid", createdAt: createdDaysAgo(500) });
+      await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: false });
+      workspace({ giftEndsAt: { toMillis: () => Date.now() + DAY }, giftMessageLimit: 10, giftMessagesUsed: 0, createdAt: createdDaysAgo(500) });
+      await expect(reserveAdvisorMessage(session)).resolves.toEqual({ reserved: true, counter: "gift" });
+    });
+
+    it("still enforces the message count inside the trial", async () => {
+      workspace({ createdAt: createdDaysAgo(2), freeMessagesUsed: 5 });
+      await expect(reserveAdvisorMessage(session)).rejects.toMatchObject({ message: expect.stringContaining("free advisor messages") });
+    });
   });
 });

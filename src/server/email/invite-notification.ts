@@ -76,6 +76,9 @@ export async function sendInviteEmail(input: InviteEmailInput): Promise<InviteEm
       text: email.text,
       html: email.html,
     });
+    // Resend reports API failures in the response rather than throwing.
+    if (response.error) return { status: "failed", reason: response.error.message };
+
     return { status: "sent", messageId: response.data?.id ?? null };
   } catch (error) {
     return {

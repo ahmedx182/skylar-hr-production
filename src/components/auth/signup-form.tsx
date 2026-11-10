@@ -62,7 +62,7 @@ export function SignupForm() {
     <form noValidate onSubmit={handleSubmit(requestSignup)} className="mt-8 flex flex-col gap-4">
       <Field label="Organization / workspace name" autoComplete="organization" placeholder="Your organization" error={errors.companyName?.message} {...register("companyName")} />
       <Field label="Your work email" type="email" autoComplete="email" inputMode="email" placeholder="you@company.com" error={errors.email?.message} {...register("email")} />
-      <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Sending verification link…" : "Create my workspace"}</Button>
+      <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Sending verification link…" : "Get started"}</Button>
       {error && <p role="alert" className="text-sm text-attention">{error}</p>}
     </form>
   );

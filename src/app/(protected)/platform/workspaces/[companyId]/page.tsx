@@ -100,7 +100,7 @@ export default async function PlatformWorkspacePage({ params }: { params: { comp
                 value={
                   activeGift && !row.payingViaStripe && row.planOverride !== "paid"
                     ? `${activeGift.messagesUsed} / ${activeGift.messageLimit}`
-                    : row.plan === "paid" ? "Unlimited" : `${row.freeMessagesUsed} / ${freeLimit}`
+                    : row.plan === "paid" ? "Unlimited" : `${row.freeMessagesUsed} / ${freeLimit ?? "unlimited"}`
                 }
                 detail={
                   activeGift && !row.payingViaStripe && row.planOverride !== "paid"

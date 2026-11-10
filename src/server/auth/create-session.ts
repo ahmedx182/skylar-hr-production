@@ -7,6 +7,7 @@ import { adminAuth } from "@/lib/firebase/admin";
 import {
   findCompanySummaryById,
   findUserById,
+  provisionHrAdvisor,
   provisionInvitedUser,
   provisionSignupWorkspace,
 } from "@/server/repositories/user.repository";
@@ -15,6 +16,7 @@ import {
   findPendingInviteByEmail,
 } from "@/server/repositories/invite.repository";
 import { isFirebaseAuthError } from "./firebase-auth-error";
+import { isHrAdvisorEmail } from "./hr-advisor-email";
 import { isPlatformAdminEmail } from "./platform-admin-email";
 import { WORKSPACE_DELETED_MESSAGE, WORKSPACE_SUSPENDED_MESSAGE } from "@/constants/auth";
 
@@ -69,18 +71,21 @@ export async function createSession(
       await provisionSignupWorkspace({ uid: decoded.uid, email, companyName: signup.companyName });
     } else {
       const invite = await findPendingInviteByEmail(email);
-      if (!invite) {
+      if (invite) {
+        await assertWorkspaceActive(invite.companyId, email);
+        await provisionInvitedUser({
+          uid: decoded.uid,
+          email,
+          companyId: invite.companyId,
+          role: invite.role,
+          linkedEmployeeId: invite.linkedEmployeeId,
+        });
+        await acceptInvite(invite.id);
+      } else if (await isHrAdvisorEmail(email, true)) {
+        await provisionHrAdvisor({ uid: decoded.uid, email });
+      } else {
         throw new AuthenticationError("This email has not been added to Skylar.");
       }
-      await assertWorkspaceActive(invite.companyId, email);
-      await provisionInvitedUser({
-        uid: decoded.uid,
-        email,
-        companyId: invite.companyId,
-        role: invite.role,
-        linkedEmployeeId: invite.linkedEmployeeId,
-      });
-      await acceptInvite(invite.id);
     }
   }
 

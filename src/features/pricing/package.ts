@@ -14,7 +14,7 @@ export type PricingPackage = {
   priceCents: number;
   interval: BillingInterval;
   features: string[];
-  /** Free package only: lifetime advisor messages. Paid packages are unlimited. */
+  /** Free package only: lifetime advisor messages, or null for unlimited during the trial. Paid packages are unlimited. */
   advisorMessageLimit: number | null;
   highlighted: boolean;
   badge: string | null;
@@ -68,10 +68,11 @@ export function monthlyEquivalentCents(pkg: Pick<PricingPackage, "priceCents" | 
 
 /** What a landing-page card lists: the free allowance is derived so it can never disagree with enforcement. */
 export function displayFeatures(pkg: PricingPackage): string[] {
-  const allowance =
-    isFreePackage(pkg) && pkg.advisorMessageLimit !== null
-      ? [`${pkg.advisorMessageLimit} advisor ${pkg.advisorMessageLimit === 1 ? "message" : "messages"}`]
-      : [];
+  const allowance = !isFreePackage(pkg)
+    ? []
+    : pkg.advisorMessageLimit === null
+      ? ["Unlimited chat with Skylar AI during the trial"]
+      : [`${pkg.advisorMessageLimit} advisor ${pkg.advisorMessageLimit === 1 ? "message" : "messages"}`];
   return [...allowance, ...pkg.features];
 }
 
@@ -106,7 +107,7 @@ export const DEFAULT_PACKAGES: Array<Omit<PricingPackage, "createdAtMs" | "updat
       "Advisor escalation routing",
       "PDF employee file exports",
     ],
-    advisorMessageLimit: 5,
+    advisorMessageLimit: null,
     highlighted: false,
     badge: null,
     published: true,
@@ -116,7 +117,7 @@ export const DEFAULT_PACKAGES: Array<Omit<PricingPackage, "createdAtMs" | "updat
     id: "professional",
     name: "Professional",
     description: "Per workspace, billed monthly. Cancel any time.",
-    priceCents: 4900,
+    priceCents: 14900,
     interval: "month",
     features: [
       "Everything in Free",

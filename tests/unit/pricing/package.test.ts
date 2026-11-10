@@ -14,12 +14,19 @@ import { packageInputSchema, toPackageInput } from "@/schemas/pricing.schema";
 
 const base: PricingPackage = {
   ...DEFAULT_PACKAGES[1],
+  priceCents: 4900,
   archived: false,
   stripeProductId: "prod_1",
   stripePriceId: "price_1",
   createdAtMs: null,
   updatedAtMs: null,
 };
+
+describe("default packages", () => {
+  it("prices Professional at $149 a month", () => {
+    expect(DEFAULT_PACKAGES.find((pkg) => pkg.id === "professional")).toMatchObject({ priceCents: 14900, interval: "month" });
+  });
+});
 
 describe("package pricing helpers", () => {
   it("formats prices without trailing zeros", () => {
@@ -47,6 +54,7 @@ describe("package pricing helpers", () => {
     expect(displayFeatures(free)).toEqual(["12 advisor messages", "Briefings"]);
     expect(displayFeatures({ ...free, advisorMessageLimit: 1 })[0]).toBe("1 advisor message");
     expect(displayFeatures(base)).toEqual(base.features);
+    expect(displayFeatures({ ...free, advisorMessageLimit: null })[0]).toBe("Unlimited chat with Skylar AI during the trial");
   });
 });
 
@@ -88,12 +96,12 @@ describe("package input rules", () => {
     expect(toPackageInput(payload({ priceUsd: 0.2 }), { id: "team" })).toMatchObject({ ok: false });
   });
 
-  it("keeps the Free package free and requires its allowance", () => {
+  it("keeps the Free package free and lets its allowance be a number or unlimited", () => {
     expect(toPackageInput(payload({ priceUsd: 25, advisorMessageLimit: 8 }), { id: "free" })).toMatchObject({
       ok: true,
       input: { priceCents: 0, advisorMessageLimit: 8 },
     });
-    expect(toPackageInput(payload({ priceUsd: 0 }), { id: "free" })).toMatchObject({ ok: false });
+    expect(toPackageInput(payload({ priceUsd: 0 }), { id: "free" })).toMatchObject({ ok: true, input: { priceCents: 0, advisorMessageLimit: null } });
   });
 
   it("never stores a message limit on a paid package", () => {

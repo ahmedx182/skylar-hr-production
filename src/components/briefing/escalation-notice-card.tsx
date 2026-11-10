@@ -1,12 +1,10 @@
-import Link from "next/link";
-import { ArrowRight, ShieldAlert } from "lucide-react";
-import { ADVISOR_PATH } from "@/constants/routes";
+import { ShieldAlert } from "lucide-react";
 import type { EscalationEvent } from "@/features/briefing/chat-escalation";
 
 const copy = {
   escalated: {
     label: "High alert",
-    title: "Escalated to advisor",
+    title: "Transferred to an HR advisor",
     detail: null,
     tone: "border-risk/45 bg-risk/10",
     accent: "text-risk",
@@ -44,15 +42,6 @@ export function EscalationNoticeCard({ event }: { event: EscalationEvent }) {
         )}
       </div>
       <p className="text-xs leading-5 text-paper-3">{style.detail ?? event.reason}</p>
-      {event.kind === "escalated" && (
-        <Link
-          href={ADVISOR_PATH}
-          className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-paper transition-colors hover:text-paper-2"
-        >
-          Open Advisor queue
-          <ArrowRight className="size-3.5" aria-hidden="true" />
-        </Link>
-      )}
     </div>
   );
 }

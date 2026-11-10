@@ -1,4 +1,5 @@
 import "server-only";
+import { SKYLAR_HR_COMPANY_ID } from "@/constants/auth";
 import { accountBlockStateOf, type AccountBlockState } from "@/features/auth/account-block";
 import { isSoftDeleted } from "./soft-delete";
 import { FieldValue } from "firebase-admin/firestore";
@@ -175,6 +176,29 @@ export async function provisionInvitedUser({
     }
     transaction.set(userRef, userData);
     return { id: uid, companyId, email, displayName, role, status: "active" as const, linkedEmployeeId: linkedEmployeeId ?? undefined };
+  });
+}
+
+/** First sign-in for an HR advisor granted by a super admin: an account in the shared Skylar HR workspace. */
+export async function provisionHrAdvisor({ uid, email }: { uid: string; email: string }): Promise<AppUser> {
+  const db = adminDb();
+  const userRef = db.collection(USERS_COLLECTION).doc(uid);
+  const companyRef = db.collection(COMPANIES_COLLECTION).doc(SKYLAR_HR_COMPANY_ID);
+  const displayName = email.split("@")[0] || "HR advisor";
+  const now = FieldValue.serverTimestamp();
+
+  return db.runTransaction(async (transaction) => {
+    const [userSnapshot, companySnapshot] = await Promise.all([transaction.get(userRef), transaction.get(companyRef)]);
+    if (userSnapshot.exists) {
+      const existing = { id: userSnapshot.id, ...appUserSchema.parse(userSnapshot.data()) };
+      if (existing.status !== "active") throw new AuthorizationError("This account is disabled.");
+      return existing;
+    }
+    if (!companySnapshot.exists) {
+      transaction.set(companyRef, { name: "Skylar HR team", subscriptionStatus: "free", createdAt: now, createdBy: uid, onboardingSource: "hr_advisor" });
+    }
+    transaction.set(userRef, { companyId: SKYLAR_HR_COMPANY_ID, email, displayName, role: "admin", status: "active", createdAt: now, updatedAt: now });
+    return { id: uid, companyId: SKYLAR_HR_COMPANY_ID, email, displayName, role: "admin", status: "active" };
   });
 }
 

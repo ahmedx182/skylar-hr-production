@@ -9,7 +9,7 @@ import { resumeDeferredCardAction } from "@/features/briefing/deferred-actions";
 import { getLayoutPreferences } from "@/server/preferences/layout-preferences";
 import type { AuthSession } from "@/types/auth";
 
-type PageKey = Exclude<IndexSection, "Today" | "Advisor" | "Billing" | "Settings">;
+type PageKey = Exclude<IndexSection, "Today" | "Advisor" | "Advisor desk" | "Billing" | "Settings">;
 export type IndexAccessItem = {
   label: string;
   title: string;

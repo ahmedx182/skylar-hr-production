@@ -1,3 +1,4 @@
+import { stageAdvisorCaseRemoval } from "@/server/repositories/soft-delete";
 import "server-only";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ConflictError, ExternalServiceError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -169,7 +170,11 @@ export async function purgeWorkspace({
     const snapshot = await db.collection(collection).where("companyId", "==", companyId).select().get();
     removed[collection] = snapshot.size;
     if (collection === "users") memberUids.push(...snapshot.docs.map((doc) => doc.id));
-    snapshot.docs.forEach((doc) => void writer.delete(doc.ref));
+    if (collection === "advisor_escalations") {
+      for (const doc of snapshot.docs) await stageAdvisorCaseRemoval(writer, doc.ref);
+    } else {
+      snapshot.docs.forEach((doc) => void writer.delete(doc.ref));
+    }
   }
   void writer.delete(db.collection("subscriptions").doc(companyId));
   await writer.close();

@@ -164,3 +164,29 @@ Still remaining beyond the current web-app task batch:
 - [Testing/release/operations](06-testing-release-operations.md)
 - [Open decisions/traceability](07-open-decisions-traceability.md)
 - [Engineering architecture](SKYLAR_ENGINEERING_ARCHITECTURE_v4.md)
+
+## Marketing Copy and Plans (2026-11-10)
+
+Landing, `/signup` and `/login` copy follows the client's Nov 2026 "thinking
+partner" brief. Brief and reference: `docs/copy/CONTEXT.md` (picks per section)
+and the `.docx` beside it, which keeps the client's yellow highlights.
+
+- Offer: 14-day free trial, unlimited AI chat, one free human escalation, then
+  Professional at $149/month. The 14-day trial already existed (platform
+  setting, `src/features/advisor/trial.ts`); after it ends, chat returns a 402.
+- Human escalation allowance: `src/features/billing/escalation-allowance.ts`.
+  Trial: 1 for the workspace's life. Paid: 3 per calendar month (UTC).
+  Enforced in `escalateFromChat` only for a manager's own request for a person;
+  a high-risk matter the system detects always transfers and still counts.
+  Counters live on the `subscriptions` doc (`escalationsUsed`,
+  `escalationPeriodKey`, `escalationsUsedThisMonth`).
+- Landing pricing cards are static (trial + $149). `DEFAULT_PACKAGES`
+  Professional is $149, but a live database package keeps its old price until a
+  super admin sets it to $149 in the platform pricing manager (this creates the
+  new Stripe price).
+- The Free package's advisor message limit can now be blank (unlimited chat
+  during the trial); the default package is unlimited. A live database Free
+  package keeps its stored number (default 5) until a super admin clears it in
+  the platform pricing manager.
+- The Billing page shows human escalations left (trial: 1 for life; paid: 3
+  this month).

@@ -13,3 +13,6 @@ export const WORKSPACE_SUSPENDED_MESSAGE =
 
 export const WORKSPACE_DELETED_MESSAGE =
   "This workspace has been deleted. Contact Skylar support within 30 days to restore it.";
+
+/** Skylar's own team workspace. HR advisors without a customer workspace are placed here. */
+export const SKYLAR_HR_COMPANY_ID = "skylar-hr";
