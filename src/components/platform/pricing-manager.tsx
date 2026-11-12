@@ -3,6 +3,7 @@
 import { Archive, ArrowUpFromLine, CheckCircle2, CloudCheck, CloudOff, Pencil, Plus, RotateCcw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { displayFeatures, formatPackagePrice, isFreePackage, type PricingPackage } from "@/features/pricing/package";
 import { cn } from "@/lib/utils/cn";
 
@@ -258,8 +259,9 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
         )}
       </div>
 
-      {draft && (
-        <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label={draft.id ? `Edit ${draft.name || "package"}` : "New package"}>
+      {draft &&
+        createPortal(
+        <div className="fixed inset-0 z-[200] flex justify-center overflow-y-auto p-4 [@media(max-height:520px)]:p-2" role="dialog" aria-modal="true" aria-label={draft.id ? `Edit ${draft.name || "package"}` : "New package"}>
           <button
             type="button"
             aria-label="Close editor"
@@ -267,19 +269,19 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
             onClick={() => !busy && setDraft(null)}
             className="absolute inset-0 cursor-default bg-black/60 backdrop-blur-[2px]"
           />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-[560px] flex-col bg-ink-2 shadow-[-24px_0_60px_rgba(0,0,0,0.45)] ring-1 ring-paper/[0.08]">
-            <div className="flex items-center justify-between gap-3 border-b border-paper/10 px-5 py-4">
+          <div className="relative my-auto flex h-full max-h-[880px] min-h-[420px] w-full max-w-[1040px] flex-col overflow-hidden rounded-[20px] bg-ink-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] ring-1 ring-paper/[0.08]">
+            <div className="flex items-center justify-between gap-3 border-b border-paper/10 px-5 py-4 [@media(max-height:520px)]:py-2">
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-paper">{draft.id ? `Edit ${draft.name || "package"}` : "New package"}</p>
-                <p className="mt-0.5 text-xs text-paper-3">{draft.id ? "Changes apply to the landing page and Billing straight away." : "It appears on the landing page once published."}</p>
+                <p className="mt-0.5 text-xs text-paper-3 [@media(max-height:520px)]:hidden">{draft.id ? "Changes apply to the landing page and Billing straight away." : "It appears on the landing page once published."}</p>
               </div>
               <button type="button" onClick={() => setDraft(null)} aria-label="Close editor" className="grid size-9 shrink-0 place-items-center rounded-lg text-paper-3 hover:bg-paper/[0.06] hover:text-paper">
                 <X className="size-4" aria-hidden="true" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5">
-              <div className="grid gap-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain lg:grid lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="grid content-start gap-4 px-5 py-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className={labelClass}>
                     Name
@@ -367,27 +369,30 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
                     Changing the price creates a new Stripe price. Current subscribers stay on the price they signed up at.
                   </p>
                 )}
+              </div>
 
-                <div className="border-t border-paper/10 pt-4">
+              <aside className="border-t border-paper/10 bg-ink/40 px-5 py-5 lg:border-l lg:border-t-0">
+                <div className="lg:sticky lg:top-5">
                   <p className="mb-2 text-xs font-semibold text-paper-3">Preview on the landing page</p>
                   <PreviewCard pkg={previewPackage(draft)} />
                 </div>
-              </div>
+              </aside>
             </div>
 
-            <div className="border-t border-paper/10 bg-ink-2 px-5 py-3">
+            <div className="border-t border-paper/10 bg-ink-2 px-5 py-3 [@media(max-height:520px)]:py-2">
               {error && <p className="mb-2 text-sm text-risk">{error}</p>}
               <div className="flex justify-end gap-2">
-                <button type="button" disabled={busy} onClick={() => setDraft(null)} className={cn(buttonBase, "h-10 px-4 text-paper-2 hover:bg-paper/[0.06] hover:text-paper")}>
+                <button type="button" disabled={busy} onClick={() => setDraft(null)} className={cn(buttonBase, "h-10 px-4 text-paper-2 hover:bg-paper/[0.06] hover:text-paper [@media(max-height:520px)]:h-9")}>
                   Cancel
                 </button>
-                <button type="button" disabled={busy} onClick={() => void save()} className={cn(buttonBase, "h-10 bg-paper px-5 text-ink hover:opacity-90")}>
+                <button type="button" disabled={busy} onClick={() => void save()} className={cn(buttonBase, "h-10 bg-paper px-5 text-ink hover:opacity-90 [@media(max-height:520px)]:h-9")}>
                   {isSaving ? "Saving..." : draft.id ? "Save changes" : "Create package"}
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <div className="grid gap-3">
