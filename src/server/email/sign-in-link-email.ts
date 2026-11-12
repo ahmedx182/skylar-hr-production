@@ -1,8 +1,11 @@
 import "server-only";
 import { Resend } from "resend";
 import { getServerEnv } from "@/lib/env/server";
+import { LOGO_PNG_BASE64 } from "@/server/email/logo-png";
 
 export type SignInEmailPurpose = "login" | "signup";
+
+const LOGO_CONTENT_ID = "skylar-logo";
 
 let resendClient: Resend | undefined;
 
@@ -19,13 +22,11 @@ export function buildSignInEmail({
   purpose,
   link,
   toEmail,
-  appUrl,
   companyName,
 }: {
   purpose: SignInEmailPurpose;
   link: string;
   toEmail: string;
-  appUrl: string;
   companyName?: string;
 }) {
   const isSignup = purpose === "signup";
@@ -49,7 +50,6 @@ export function buildSignInEmail({
     "Skylar · Briefing Room",
   ].join("\n");
 
-  const logoUrl = `${appUrl}/brand/logo.png`;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -69,7 +69,7 @@ export function buildSignInEmail({
               <table role="presentation" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="vertical-align:middle;padding-right:10px;">
-                    <img src="${escapeHtml(logoUrl)}" width="30" height="28" alt="" style="display:block;border:0;" />
+                    <img src="cid:${LOGO_CONTENT_ID}" width="30" height="28" alt="" style="display:block;border:0;" />
                   </td>
                   <td style="vertical-align:middle;font-size:17px;font-weight:700;color:#F2EFE8;">
                     Skylar <span style="font-weight:400;color:#7E7B74;font-size:14px;">Briefing Room</span>
@@ -123,6 +123,7 @@ export async function sendSignInEmail(input: Parameters<typeof buildSignInEmail>
     subject: email.subject,
     text: email.text,
     html: email.html,
+    attachments: [{ filename: "skylar-logo.png", content: Buffer.from(LOGO_PNG_BASE64, "base64"), contentId: LOGO_CONTENT_ID }],
   });
   if (error) {
     console.error(JSON.stringify({ level: "error", event: "sign_in_email_failed", error: error.message }));

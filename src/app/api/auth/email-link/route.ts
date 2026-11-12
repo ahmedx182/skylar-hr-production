@@ -76,7 +76,6 @@ export async function POST(request: Request) {
       purpose: input.purpose,
       link,
       toEmail: input.email,
-      appUrl,
       companyName: input.purpose === "signup" ? input.companyName : undefined,
     });
 

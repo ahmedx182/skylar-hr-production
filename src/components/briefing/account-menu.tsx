@@ -1,19 +1,21 @@
 "use client";
 
-import { Building2, CheckCircle2, CreditCard, LogOut, Settings } from "lucide-react";
+import { Building2, CheckCircle2, CreditCard, LogOut, Settings, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { BILLING_PATH, SETTINGS_PATH } from "@/constants/routes";
 import { companyDisplayName } from "@/lib/company-display-name";
+import type { BillingPlan } from "@/features/billing/subscription-status";
 import type { AuthSession } from "@/types/auth";
 
 function initials(name: string) {
   return name.slice(0, 1).toUpperCase();
 }
 
-export function AccountMenu({ session }: { session: AuthSession }) {
+/** `plan` is only known for workspace admins; the plan row is hidden when it is omitted. */
+export function AccountMenu({ session, plan }: { session: AuthSession; plan?: BillingPlan }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -119,6 +121,20 @@ export function AccountMenu({ session }: { session: AuthSession }) {
               <p className="font-semibold text-paper">Secure</p>
             </div>
           </div>
+          {plan && (
+            <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+              <Sparkles className={plan === "paid" ? "size-4 text-sun" : "size-4 text-paper-3"} aria-hidden="true" />
+              <div>
+                <p className="text-xs text-paper-3">Plan</p>
+                <p className="flex items-center gap-2 font-semibold text-paper">
+                  {plan === "paid" ? "Professional" : "Free"}
+                  {plan === "paid" && (
+                    <span className="rounded-full bg-sun/15 px-2 py-0.5 text-[11px] font-semibold text-sun">Pro</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
           {session.role === "admin" && (
             <Link
               href={BILLING_PATH}

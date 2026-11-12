@@ -70,6 +70,8 @@ export async function POST(request: Request) {
       billing_address_collection: "auto",
       phone_number_collection: { enabled: false },
       automatic_tax: { enabled: false },
+      // Stripe's default Managed Payments makes Stripe the merchant of record and rejects automatic_tax off.
+      managed_payments: { enabled: false },
       allow_promotion_codes: false,
       payment_method_collection: "always",
       submit_type: "auto",

@@ -25,6 +25,13 @@ vi.mock("@/lib/firebase/admin", () => ({
         }),
         where: () => ({ limit: () => ({ get: async () => ({ docs: [] }) }) }),
       }),
+      runTransaction: async <T>(run: (transaction: unknown) => Promise<T>) =>
+        run({
+          get: async (ref: { path: string }) => ({ get: (field: string) => store.get(ref.path)?.[field] }),
+          set: (ref: { path: string }, data: Doc) => {
+            store.set(ref.path, { ...(store.get(ref.path) ?? {}), ...data });
+          },
+        }),
       batch: () => ({
         set(ref: { path: string }, data: Doc) {
           writes.push(() => store.set(ref.path, { ...(store.get(ref.path) ?? {}), ...data }));
@@ -137,5 +144,15 @@ describe("markCheckoutCompleted", () => {
     await markCheckoutCompleted("cs_1", "sub_1", "acme");
 
     expect(store.get("subscriptions/acme")).toMatchObject({ stripeSubscriptionId: "sub_1" });
+  });
+
+  it("reports the first delivery of a checkout session only once", async () => {
+    expect(await markCheckoutCompleted("cs_1", "sub_1", "acme")).toBe(true);
+    expect(await markCheckoutCompleted("cs_1", "sub_1", "acme")).toBe(false);
+    expect(await markCheckoutCompleted("cs_2", "sub_2", "acme")).toBe(true);
+  });
+
+  it("reports nothing to confirm when no workspace matches", async () => {
+    expect(await markCheckoutCompleted("cs_1", "sub_1", null)).toBe(false);
   });
 });

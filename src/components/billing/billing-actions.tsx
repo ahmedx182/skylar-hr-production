@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { ArrowUpRight, CreditCard } from "lucide-react";
+import { openStripe, type StripeTarget } from "@/components/billing/open-stripe";
 
 type Plan = { id: string; name: string; priceLabel: string };
-type Pending = { kind: "checkout"; packageId: string } | { kind: "portal" } | null;
+type Pending = StripeTarget | null;
 
 export function BillingActions({ hasCustomer, plans }: { hasCustomer: boolean; plans: Plan[] }) {
   const [pending, setPending] = useState<Pending>(null);
@@ -14,21 +15,7 @@ export function BillingActions({ hasCustomer, plans }: { hasCustomer: boolean; p
     setPending(target);
     setError(null);
     try {
-      const response = await fetch(`/api/billing/${target.kind}`, {
-        method: "POST",
-        ...(target.kind === "checkout"
-          ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packageId: target.packageId }) }
-          : {}),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { url?: string; error?: { message?: string } }
-        | null;
-
-      if (!response.ok || !payload?.url) {
-        throw new Error(payload?.error?.message ?? "Stripe could not be opened.");
-      }
-
-      window.location.assign(payload.url);
+      await openStripe(target);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Stripe could not be opened.");
       setPending(null);

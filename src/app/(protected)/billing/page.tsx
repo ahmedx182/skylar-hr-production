@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CheckCircle2, CreditCard, MessageSquare, ShieldAlert, type LucideIcon } from "lucide-react";
 import { BillingActions } from "@/components/billing/billing-actions";
+import { BillingHistory } from "@/components/billing/billing-history";
 import { BillingReturnNotice, parseBillingReturn } from "@/components/billing/billing-return-notice";
 import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import {
@@ -15,6 +16,7 @@ import { requirePageSession } from "@/server/auth/require-session";
 import { requireRole } from "@/server/auth/require-role";
 import { getEscalationAllowanceForCompany, getFreeTrialForCompany, getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
 import { listPublishedPackages } from "@/server/repositories/pricing.repository";
+import { listBillingHistory } from "@/server/stripe/billing-history";
 
 export const metadata: Metadata = { title: "Billing" };
 
@@ -30,6 +32,7 @@ export default async function BillingPage({
     getFreeTrialForCompany(session.companyId),
     getEscalationAllowanceForCompany(session),
   ]);
+  const history = billing.stripeCustomerId ? await listBillingHistory(billing.stripeCustomerId) : [];
   const billingReturn = parseBillingReturn(searchParams.billing);
   const env = getServerEnv();
   const paymentGateDisabled = env.DEMO_DISABLE_PAYMENT_GATE;
@@ -76,7 +79,7 @@ export default async function BillingPage({
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        <div className="grid gap-4">
           <div className="rounded-[20px] bg-ink-2/70 p-4 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.04)]">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <BillingMetric
@@ -145,27 +148,7 @@ export default async function BillingPage({
               )}
             </div>
           </div>
-
-          <aside className="rounded-[20px] bg-ink-2/70 p-5 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.04)]">
-            <div className="flex items-start gap-3 rounded-2xl bg-risk/10 p-4 text-risk">
-              <ShieldAlert className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
-              <div>
-                <p className="font-semibold">Webhook is authoritative</p>
-                <p className="mt-2 text-sm leading-6 text-paper-3">
-                  Returning from Stripe does not unlock the app by itself. The subscription state
-                  changes only after `/api/stripe/webhook` verifies Stripe&apos;s signature.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 rounded-2xl bg-paper/[0.055] p-4">
-              <p className="font-mono text-xs uppercase text-paper-3">Release check</p>
-              <p className="mt-2 text-sm leading-6 text-paper-2">
-                {paymentGateDisabled
-                  ? "For tomorrow, demo every core flow except payment. Re-enable the gate before live billing UAT."
-                  : "Add live Stripe keys, set the webhook endpoint, then run the full free to paid flow before releasing the web app."}
-              </p>
-            </div>
-          </aside>
+          <BillingHistory items={history} />
         </div>
       </section>
     </BriefingRoomFrame>

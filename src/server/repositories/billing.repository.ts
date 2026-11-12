@@ -173,11 +173,15 @@ export async function syncStripeSubscription(
   await batch.commit();
 }
 
+/**
+ * Records a completed Checkout. Returns true only the first time this session is seen, so the caller can
+ * send the confirmation email once even when Stripe redelivers the webhook.
+ */
 export async function markCheckoutCompleted(
   sessionId: string,
   subscriptionId?: string | null,
   companyId?: string | null,
-) {
+): Promise<boolean> {
   let ref: FirebaseFirestore.DocumentReference | undefined;
   if (companyId) {
     ref = adminDb().collection(SUBSCRIPTIONS_COLLECTION).doc(companyId);
@@ -189,16 +193,24 @@ export async function markCheckoutCompleted(
       .get();
     ref = snapshot.docs[0]?.ref;
   }
-  if (!ref) return;
+  if (!ref) return false;
 
-  await ref.set(
-    {
-      stripeSubscriptionId: subscriptionId ?? null,
-      checkoutCompletedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+  const checkoutRef = ref;
+  return adminDb().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(checkoutRef);
+    const alreadyRecorded = snapshot.get("confirmedCheckoutSessionId") === sessionId;
+    transaction.set(
+      checkoutRef,
+      {
+        stripeSubscriptionId: subscriptionId ?? null,
+        confirmedCheckoutSessionId: sessionId,
+        checkoutCompletedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return !alreadyRecorded;
+  });
 }
 
 export async function saveCheckoutSessionForCompany(

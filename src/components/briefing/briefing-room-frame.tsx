@@ -1,3 +1,4 @@
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 import { AccountMenu } from "@/components/briefing/account-menu";
 import { AdvisorNotifications } from "@/components/briefing/advisor-notifications";
 import { AppShellGrid } from "@/components/briefing/app-shell-grid";
@@ -7,10 +8,14 @@ import { FloatingSkylarAction } from "@/components/briefing/floating-skylar-acti
 import { QuickActions } from "@/components/briefing/quick-actions";
 import { PlatformNav, SidebarModeSwitch, type PlatformSection } from "@/components/platform/platform-nav";
 import { SKYLAR_HR_COMPANY_ID } from "@/constants/auth";
+import { formatPackagePrice, isPurchasable } from "@/features/pricing/package";
+import { getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
 import { isAdvisor } from "@/server/auth/advisor-access";
 import { getLayoutPreferences } from "@/server/preferences/layout-preferences";
 import { countOpenEscalations } from "@/server/repositories/advisor-escalation.repository";
 import { listCompanyEmployees } from "@/server/repositories/briefing-read.repository";
+import { listPublishedPackages } from "@/server/repositories/pricing.repository";
+import { isStripeConfigured } from "@/server/stripe/pricing-sync";
 import type { AuthSession } from "@/types/auth";
 
 export async function BriefingRoomFrame({
@@ -28,12 +33,21 @@ export async function BriefingRoomFrame({
 }) {
   const isPlatform = mode === "platform";
   const isHrTeam = session.companyId === SKYLAR_HR_COMPANY_ID;
-  const [employees, openEscalations] = isPlatform
-    ? [[], 0]
+  const isWorkspaceAdmin = !isPlatform && !isHrTeam && session.role === "admin";
+  const [employees, openEscalations, billing] = isPlatform
+    ? [[], 0, null]
     : await Promise.all([
         listCompanyEmployees(session.companyId),
         session.role === "admin" ? countOpenEscalations(session.companyId) : Promise.resolve(0),
+        isWorkspaceAdmin ? getOrCreateCompanyBillingState(session) : Promise.resolve(null),
       ]);
+  const showUpgrade = billing !== null && billing.plan !== "paid";
+  const upgradePlans = showUpgrade && isStripeConfigured()
+    ? (await listPublishedPackages()).filter(isPurchasable).map((pkg) => {
+        const price = formatPackagePrice(pkg);
+        return { id: pkg.id, name: pkg.name, priceLabel: `${price.amount} ${price.period}`, description: pkg.description };
+      })
+    : [];
   const employeeOptions = employees.map((employee) => ({
     id: employee.id,
     name: employee.name,
@@ -61,7 +75,10 @@ export async function BriefingRoomFrame({
               </span>
             )}
           </div>
-          <AccountMenu session={session} />
+          <div className="flex shrink-0 items-center gap-3">
+            {showUpgrade && <UpgradeModal plans={upgradePlans} />}
+            <AccountMenu session={session} plan={billing?.plan} />
+          </div>
         </header>
 
         <AppShellGrid
