@@ -181,9 +181,9 @@ and the `.docx` beside it, which keeps the client's yellow highlights.
   Counters live on the `subscriptions` doc (`escalationsUsed`,
   `escalationPeriodKey`, `escalationsUsedThisMonth`).
 - Landing pricing cards are static (trial + $149). `DEFAULT_PACKAGES`
-  Professional is $149, but a live database package keeps its old price until a
-  super admin sets it to $149 in the platform pricing manager (this creates the
-  new Stripe price).
+  Professional is $149, and the live Professional package was set to $149 in the
+  platform pricing manager on 2026-11-10 (this created the new Stripe price;
+  existing subscribers stay on their old price).
 - The Free package's advisor message limit can now be blank (unlimited chat
   during the trial); the default package is unlimited. A live database Free
   package keeps its stored number (default 5) until a super admin clears it in
