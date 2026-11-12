@@ -599,10 +599,10 @@ async function loadWorkspaceCase(session: AuthSession, escalationId: string) {
 }
 
 /**
- * Who may read and write a case's conversation: the manager who opened it. If that person is gone (deleted,
+ * Who may write to a case's conversation: the manager who opened it. If that person is gone (deleted,
  * suspended, no longer an admin of this workspace) or the case was never opened by a real account, such as a
  * seeded demo case, it belongs to the workspace's current admins, so a conversation can't be stranded with nobody.
- * A colleague who is still an active admin never gets in: the conversation may be about them.
+ * Any other admin of the workspace can read it (Skylar's answer) but not reply, claim or reopen.
  */
 async function isCaseOwner(session: AuthSession, data: DocumentData): Promise<boolean> {
   if (data.createdBy === session.uid) return true;
@@ -640,7 +640,7 @@ export async function getUserLiveCase(session: AuthSession, escalationId: string
     readOnly: !isOwner,
     canSend: isOwner && canUserSend(status),
     canReopen: isOwner && canReopenCase(status),
-    // These can be about a colleague, so another admin must not read them.
+    // Every admin of the workspace can read the conversation; readOnly stops them writing to it.
     messages: await listMessages(ref.id, { includeSeeded: false }),
   };
 }

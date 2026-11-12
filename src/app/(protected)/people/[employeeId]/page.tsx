@@ -7,6 +7,7 @@ import { BriefingRoomFrame } from "@/components/briefing/briefing-room-frame";
 import { CopyEmailButton } from "@/components/briefing/copy-email-button";
 import { DeleteEmployeeButton } from "@/components/briefing/delete-employee-button";
 import { EditEmployeeProfile } from "@/components/briefing/edit-employee-profile";
+import { EmployeeAdvisorChats } from "@/components/briefing/employee-advisor-chats";
 import { EmployeeHistoryList } from "@/components/briefing/employee-history-list";
 import { PrintEmployeeFileButton } from "@/components/briefing/print-employee-file-button";
 import { NEW_NOTE_PATH, PEOPLE_PATH } from "@/constants/routes";
@@ -145,6 +146,18 @@ export default async function EmployeeProfilePage({
             </div>
           </div>
         </div>
+
+        {canEdit && escalations.length > 0 && (
+          <EmployeeAdvisorChats
+            chats={escalations.map((item) => ({
+              id: item.id,
+              caseId: item.caseId,
+              phase: item.phase,
+              advisorName: item.claimedByName,
+              createdAtMs: item.createdAtMs,
+            }))}
+          />
+        )}
 
         <div className="rounded-[20px] bg-ink-2/60 p-4 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.035)]">
           <div className="flex items-center justify-between gap-4">
