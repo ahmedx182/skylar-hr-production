@@ -37,3 +37,6 @@ next-env.d.ts
 
 .env*
 !.env.example
+
+# generated docs: the PDF export is ~140 MB (over the GitHub 100 MB limit); the .md next to it is the source
+docs/live-advisor-escalation-plan.pdf
