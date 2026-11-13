@@ -39,7 +39,7 @@ Checkout Session call.
 | `billing_address_collection` | `auto` |
 | `phone_number_collection` | `{ enabled: false }` |
 | `automatic_tax` | `{ enabled: false }` |
-| `allow_promotion_codes` | `false` |
+| `allow_promotion_codes` | `true` (customers can enter a code such as `FREE30` on the Checkout page) |
 | `payment_method_collection` | `always` (mode is `subscription`) |
 | `submit_type` | `auto` |
 | `integration_identifier` | `hosted_web_0001` |
@@ -91,7 +91,7 @@ No new files or routes were added (Scenario A — the integration already existe
    "activating" until the webhook lands); `/billing?billing=cancelled` confirms nothing was charged.
 9. **Landing page**: pricing cards come from the published packages in Platform → Pricing; all CTAs go to
    signup, and upgrading happens from Billing inside the app.
-10. **Packages**: super admins create/edit/archive packages (name, price, monthly or yearly, features, badge, order).
+10. **Packages**: there are exactly two packages, Free and Professional, and super admins edit them (name, price, monthly or yearly, features, badge, order) and promo codes; new packages can't be added.
     The Free package's message allowance is editable and enforced straight away. Checkout takes a `packageId`, and the
     subscription records which package was bought.
 11. **Deleting a workspace** (Platform → Workspaces → Admin actions) is a soft delete: it locks everyone out, cancels any

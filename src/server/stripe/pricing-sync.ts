@@ -2,6 +2,7 @@ import "server-only";
 import { getServerEnv } from "@/lib/env/server";
 import { needsNewStripePrice, type ExistingStripePrice, type PricingPackage } from "@/features/pricing/package";
 import { stripe } from "@/server/stripe/client";
+import { isMissingInStripe } from "@/server/stripe/errors";
 import { attachStripeIds } from "@/server/repositories/pricing.repository";
 
 export type StripeSyncResult =
@@ -43,8 +44,16 @@ export async function syncPackageToStripe(pkg: PricingPackage): Promise<StripeSy
     }
 
     if (productId) {
-      await client.products.update(productId, { name: pkg.name, description: pkg.description || undefined, active: true });
-    } else {
+      try {
+        await client.products.update(productId, { name: pkg.name, description: pkg.description || undefined, active: true });
+      } catch (error) {
+        // The stored product belongs to the other mode's account (test vs live). Make a fresh one there.
+        if (!isMissingInStripe(error)) throw error;
+        productId = null;
+        existing = null;
+      }
+    }
+    if (!productId) {
       productId = (
         await client.products.create({ name: pkg.name, description: pkg.description || undefined, metadata: { packageId: pkg.id } })
       ).id;

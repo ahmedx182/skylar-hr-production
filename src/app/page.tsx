@@ -3,10 +3,23 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, ArrowUpRight, CheckCircle2, FileText, ShieldAlert, Users, Zap } from "lucide-react";
 import { BRIEFING_PATH, LOGIN_PATH, PRIVACY_PATH, SIGNUP_PATH, TERMS_PATH } from "@/constants/routes";
+import { displayFeatures, formatPackagePrice, isFreePackage, type PricingPackage } from "@/features/pricing/package";
 import { getSession } from "@/server/auth/get-session";
+import { listPublishedPackages } from "@/server/repositories/pricing.repository";
+
+/** Paid packages come from Platform → Pricing. If they can't be read the trial card still shows, rather than a stale price. */
+async function loadPaidPackages(): Promise<PricingPackage[]> {
+  try {
+    return (await listPublishedPackages()).filter((pkg) => !isFreePackage(pkg));
+  } catch (error) {
+    console.error(JSON.stringify({ level: "error", event: "landing_pricing_load_failed", error: error instanceof Error ? error.message : "unknown" }));
+    return [];
+  }
+}
 
 export default async function MarketingPage() {
   if (await getSession()) redirect(BRIEFING_PATH);
+  const paidPackages = await loadPaidPackages();
 
   return (
     <div className="min-h-dvh bg-[#0d0b09] text-paper selection:bg-[#F2A93B]/20">
@@ -332,37 +345,46 @@ export default async function MarketingPage() {
                 </Link>
               </div>
 
-              <div className="lp-reveal relative flex flex-col rounded-3xl bg-[#F2A93B]/[0.06] p-8 shadow-[0_24px_80px_rgba(242,169,59,0.08)] ring-1 ring-[#F2A93B]/30 md:p-10" style={{ animationDelay: "100ms" }}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-paper">Professional</p>
-                  <span className="rounded-full bg-[#F2A93B]/15 px-2.5 py-1 text-[11px] font-semibold text-[#F2A93B]">After your trial</span>
-                </div>
-                <p className="mt-4 flex items-baseline gap-1.5 text-paper">
-                  <span className="text-[2.75rem] font-semibold leading-none tracking-tight">$149</span>
-                  <span className="text-sm text-paper/45">/ month</span>
-                </p>
-                <p className="mt-3 text-[14px] leading-6 text-paper/55">Keep the conversation going. Make Skylar part of how you prepare for employee conversations and HR questions.</p>
-                <ul className="mt-8 flex-1 space-y-3.5">
-                  {[
-                    "Everything in your trial",
-                    "Secure checkout and invoices by Stripe",
-                    "Cancel any time from the billing portal",
-                  ].map((item) => (
-                    <li key={item} className="flex items-start gap-3 text-[14px] leading-5 text-paper/75">
-                      <CheckCircle2 className="mt-px size-4 shrink-0 text-[#F2A93B]" aria-hidden="true" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={SIGNUP_PATH}
-                  className="mt-10 flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-paper text-sm font-semibold text-[#0d0b09] transition-opacity hover:opacity-90 active:scale-[0.98]"
-                >
-                  Choose Skylar
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </Link>
-                <p className="mt-3 text-center text-[11px] text-paper/40">Start with the trial, upgrade when you are ready</p>
-              </div>
+              {paidPackages.map((pkg, index) => {
+                const price = formatPackagePrice(pkg);
+                return (
+                  <div
+                    key={pkg.id}
+                    className={
+                      pkg.highlighted
+                        ? "lp-reveal relative flex flex-col rounded-3xl bg-[#F2A93B]/[0.06] p-8 shadow-[0_24px_80px_rgba(242,169,59,0.08)] ring-1 ring-[#F2A93B]/30 md:p-10"
+                        : "lp-reveal relative flex flex-col rounded-3xl bg-paper/[0.03] p-8 ring-1 ring-paper/[0.08] md:p-10"
+                    }
+                    style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-paper">{pkg.name}</p>
+                      {pkg.badge && <span className="rounded-full bg-[#F2A93B]/15 px-2.5 py-1 text-[11px] font-semibold text-[#F2A93B]">{pkg.badge}</span>}
+                    </div>
+                    <p className="mt-4 flex items-baseline gap-1.5 text-paper">
+                      <span className="text-[2.75rem] font-semibold leading-none tracking-tight">{price.amount}</span>
+                      <span className="text-sm text-paper/45">{price.period}</span>
+                    </p>
+                    {pkg.description && <p className="mt-3 text-[14px] leading-6 text-paper/55">{pkg.description}</p>}
+                    <ul className="mt-8 flex-1 space-y-3.5">
+                      {displayFeatures(pkg).map((item) => (
+                        <li key={item} className="flex items-start gap-3 text-[14px] leading-5 text-paper/75">
+                          <CheckCircle2 className={pkg.highlighted ? "mt-px size-4 shrink-0 text-[#F2A93B]" : "mt-px size-4 shrink-0 text-paper/40"} aria-hidden="true" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      href={SIGNUP_PATH}
+                      className="mt-10 flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-paper text-sm font-semibold text-[#0d0b09] transition-opacity hover:opacity-90 active:scale-[0.98]"
+                    >
+                      Choose {pkg.name}
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </Link>
+                    <p className="mt-3 text-center text-[11px] text-paper/40">Start with the trial, upgrade when you are ready</p>
+                  </div>
+                );
+              })}
             </div>
 
             <dl className="lp-reveal mt-16 grid gap-x-16 gap-y-10 border-t border-paper/[0.08] pt-12 md:grid-cols-2">

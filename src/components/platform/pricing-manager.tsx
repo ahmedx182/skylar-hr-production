@@ -1,16 +1,17 @@
 "use client";
 
-import { Archive, ArrowUpFromLine, CheckCircle2, CloudCheck, CloudOff, Pencil, Plus, RotateCcw, X } from "lucide-react";
+import { CheckCircle2, RotateCcw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { PlansTable } from "@/components/platform/plans-table";
 import { displayFeatures, formatPackagePrice, isFreePackage, type PricingPackage } from "@/features/pricing/package";
 import { cn } from "@/lib/utils/cn";
 
 export type PackageWithStats = PricingPackage & { subscribers: number };
 
 type Draft = {
-  id: string | null;
+  id: string;
   name: string;
   description: string;
   priceUsd: string;
@@ -25,22 +26,6 @@ type Draft = {
 
 type Notice = { tone: "success" | "warning" | "error"; text: string } | null;
 type StripeResult = { status: "synced" | "skipped" | "failed"; message?: string; createdNewPrice?: boolean };
-
-function emptyDraft(sortOrder: number): Draft {
-  return {
-    id: null,
-    name: "",
-    description: "",
-    priceUsd: "",
-    interval: "month",
-    featuresText: "",
-    advisorMessageLimit: "",
-    highlighted: false,
-    badge: "",
-    published: true,
-    sortOrder: String(sortOrder),
-  };
-}
 
 function draftFrom(pkg: PricingPackage): Draft {
   return {
@@ -62,7 +47,7 @@ function previewPackage(draft: Draft): PricingPackage {
   const price = Number.parseFloat(draft.priceUsd);
   const limit = Number.parseInt(draft.advisorMessageLimit, 10);
   return {
-    id: draft.id ?? "preview",
+    id: draft.id,
     name: draft.name.trim() || "Package name",
     description: draft.description.trim(),
     priceCents: Number.isFinite(price) ? Math.round(price * 100) : 0,
@@ -153,7 +138,7 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
       document.body.style.overflow = previousOverflow;
     };
   }, [editorOpen]);
-  const isFreeDraft = draft?.id !== null && draft?.id !== undefined && isFreePackage({ id: draft.id });
+  const isFreeDraft = draft !== null && isFreePackage({ id: draft.id });
 
   function update<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
@@ -184,8 +169,8 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
         published: draft.published,
         sortOrder: Number.parseInt(draft.sortOrder || "0", 10),
       };
-      const payload = await request(draft.id ? `/api/platform/pricing/${encodeURIComponent(draft.id)}` : "/api/platform/pricing", {
-        method: draft.id ? "PUT" : "POST",
+      const payload = await request(`/api/platform/pricing/${encodeURIComponent(draft.id)}`, {
+        method: "PUT",
         body: JSON.stringify(body),
       });
       setNotice(stripeNotice(payload?.stripe, draft.name.trim() || "Package"));
@@ -216,7 +201,8 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
     }
   }
 
-  const nextSort = packages.reduce((max, pkg) => Math.max(max, pkg.sortOrder), 0) + 1;
+  const active = packages.filter((pkg) => !pkg.archived);
+  const archived = packages.filter((pkg) => pkg.archived);
   const buttonBase = "inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors disabled:cursor-wait disabled:opacity-60";
 
   return (
@@ -243,25 +229,12 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-paper-3">{packages.length} packages. The order below is the order on the landing page.</p>
-        {!draft && (
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(emptyDraft(nextSort));
-              setError("");
-            }}
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-paper px-4 text-sm font-semibold text-ink transition-opacity hover:opacity-90"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            New package
-          </button>
-        )}
+        <p className="text-sm text-paper-3">Free and Professional are the only plans. Edits apply to the landing page and Billing straight away.</p>
       </div>
 
       {draft &&
         createPortal(
-        <div className="fixed inset-0 z-[200] flex justify-center overflow-y-auto p-4 [@media(max-height:520px)]:p-2" role="dialog" aria-modal="true" aria-label={draft.id ? `Edit ${draft.name || "package"}` : "New package"}>
+        <div className="fixed inset-0 z-[200] flex justify-center overflow-y-auto p-4 [@media(max-height:520px)]:p-2" role="dialog" aria-modal="true" aria-label={`Edit ${draft.name || "package"}`}>
           <button
             type="button"
             aria-label="Close editor"
@@ -272,8 +245,8 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
           <div className="relative my-auto flex h-full max-h-[880px] min-h-[420px] w-full max-w-[1040px] flex-col overflow-hidden rounded-[20px] bg-ink-2 shadow-[0_24px_80px_rgba(0,0,0,0.5)] ring-1 ring-paper/[0.08]">
             <div className="flex items-center justify-between gap-3 border-b border-paper/10 px-5 py-4 [@media(max-height:520px)]:py-2">
               <div className="min-w-0">
-                <p className="truncate text-base font-semibold text-paper">{draft.id ? `Edit ${draft.name || "package"}` : "New package"}</p>
-                <p className="mt-0.5 text-xs text-paper-3 [@media(max-height:520px)]:hidden">{draft.id ? "Changes apply to the landing page and Billing straight away." : "It appears on the landing page once published."}</p>
+                <p className="truncate text-base font-semibold text-paper">{`Edit ${draft.name || "package"}`}</p>
+                <p className="mt-0.5 text-xs text-paper-3 [@media(max-height:520px)]:hidden">Changes apply to the landing page and Billing straight away.</p>
               </div>
               <button type="button" onClick={() => setDraft(null)} aria-label="Close editor" className="grid size-9 shrink-0 place-items-center rounded-lg text-paper-3 hover:bg-paper/[0.06] hover:text-paper">
                 <X className="size-4" aria-hidden="true" />
@@ -364,7 +337,7 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
                   </label>
                 </div>
 
-                {!isFreeDraft && draft.id && (
+                {!isFreeDraft && (
                   <p className="text-xs leading-5 text-paper-3">
                     Changing the price creates a new Stripe price. Current subscribers stay on the price they signed up at.
                   </p>
@@ -386,7 +359,7 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
                   Cancel
                 </button>
                 <button type="button" disabled={busy} onClick={() => void save()} className={cn(buttonBase, "h-10 bg-paper px-5 text-ink hover:opacity-90 [@media(max-height:520px)]:h-9")}>
-                  {isSaving ? "Saving..." : draft.id ? "Save changes" : "Create package"}
+                  {isSaving ? "Saving..." : "Save changes"}
                 </button>
               </div>
             </div>
@@ -395,95 +368,51 @@ export function PricingManager({ packages, stripeConfigured }: { packages: Packa
         document.body,
       )}
 
-      <div className="grid gap-3">
-        {packages.map((pkg) => {
-          const price = formatPackagePrice(pkg);
-          const isFree = isFreePackage(pkg);
-          const synced = Boolean(pkg.stripePriceId);
-          return (
-            <div
-              key={pkg.id}
-              className={cn(
-                "grid gap-4 rounded-2xl bg-paper/[0.045] p-4 shadow-[inset_0_0_0_1px_rgba(244,239,231,0.05)] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center",
-                pkg.archived && "opacity-60",
-              )}
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-base font-semibold text-paper">{pkg.name}</p>
-                  {isFree && <span className="rounded-full bg-paper/[0.1] px-2 py-0.5 text-[11px] font-semibold text-paper-2">Default plan</span>}
-                  {pkg.archived ? (
-                    <span className="rounded-full bg-paper/[0.1] px-2 py-0.5 text-[11px] font-semibold text-paper-2">Archived</span>
-                  ) : pkg.published ? (
-                    <span className="rounded-full bg-success/12 px-2 py-0.5 text-[11px] font-semibold text-success">Published</span>
-                  ) : (
-                    <span className="rounded-full bg-sun/15 px-2 py-0.5 text-[11px] font-semibold text-sun">Draft</span>
-                  )}
-                  {pkg.highlighted && <span className="rounded-full bg-sun/15 px-2 py-0.5 text-[11px] font-semibold text-sun">Highlighted</span>}
-                </div>
-                <p className="mt-1 text-sm text-paper-2">
-                  <span className="font-semibold text-paper">{price.amount}</span> {price.period}
-                  <span className="mx-2 text-paper/20">|</span>
-                  {isFree ? (pkg.advisorMessageLimit === null ? "Unlimited trial chat" : `${pkg.advisorMessageLimit} free advisor messages`) : "Unlimited advisor messages"}
-                  <span className="mx-2 text-paper/20">|</span>
-                  {pkg.features.length} features
-                </p>
-                <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-paper-3">
-                  {isFree ? (
-                    <span>{pkg.subscribers} workspaces on this plan</span>
-                  ) : (
-                    <>
-                      <span className="inline-flex items-center gap-1.5">
-                        {synced ? <CloudCheck className="size-3.5 text-success" aria-hidden="true" /> : <CloudOff className="size-3.5 text-sun" aria-hidden="true" />}
-                        {synced ? "Synced to Stripe" : "Not synced to Stripe"}
-                      </span>
-                      <span>{pkg.subscribers} subscribers</span>
-                    </>
-                  )}
-                </p>
-              </div>
+      <PlansTable
+        packages={active}
+        busy={busy}
+        workingId={busyId}
+        onEdit={(pkg) => {
+          setDraft(draftFrom(pkg));
+          setError("");
+        }}
+        onSync={(pkg) => void act(pkg, "sync")}
+        onArchive={(pkg) => void act(pkg, "archive")}
+      />
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setDraft(draftFrom(pkg));
-                    setError("");
-                  }}
-                  className={cn(buttonBase, "bg-paper/[0.08] text-paper hover:bg-paper hover:text-ink")}
-                >
-                  <Pencil className="size-3.5" aria-hidden="true" />
-                  Edit
-                </button>
-                {!isFree && (
+      {archived.length > 0 && (
+        <details className="group rounded-2xl bg-paper/[0.03] ring-1 ring-paper/[0.06]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3.5 text-sm font-semibold text-paper-2 transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper/40 [&::-webkit-details-marker]:hidden">
+            <span>Archived packages ({archived.length})</span>
+            <span className="text-xs font-normal text-paper-3 group-open:hidden">Show</span>
+            <span className="hidden text-xs font-normal text-paper-3 group-open:inline">Hide</span>
+          </summary>
+          <ul className="divide-y divide-paper/[0.06] border-t border-paper/[0.06]">
+            {archived.map((pkg) => {
+              const price = formatPackagePrice(pkg);
+              return (
+                <li key={pkg.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-paper-2">{pkg.name}</p>
+                    <p className="text-xs text-paper-3">
+                      <span className="tabular-nums">{price.amount}</span> {price.period} · {pkg.subscribers} {pkg.subscribers === 1 ? "subscriber keeps" : "subscribers keep"} this plan
+                    </p>
+                  </div>
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void act(pkg, "sync")}
-                    className={cn(buttonBase, "bg-sun/15 text-sun hover:bg-sun hover:text-ink")}
+                    onClick={() => void act(pkg, "restore")}
+                    className={cn(buttonBase, "bg-success/15 text-success hover:bg-success hover:text-ink")}
                   >
-                    <ArrowUpFromLine className="size-3.5" aria-hidden="true" />
-                    {busyId === pkg.id ? "Working..." : "Sync to Stripe"}
+                    <RotateCcw className="size-3.5" aria-hidden="true" />
+                    {busyId === pkg.id ? "Working..." : "Restore"}
                   </button>
-                )}
-                {!isFree &&
-                  (pkg.archived ? (
-                    <button type="button" disabled={busy} onClick={() => void act(pkg, "restore")} className={cn(buttonBase, "bg-success/15 text-success hover:bg-success hover:text-ink")}>
-                      <RotateCcw className="size-3.5" aria-hidden="true" />
-                      Restore
-                    </button>
-                  ) : (
-                    <button type="button" disabled={busy} onClick={() => void act(pkg, "archive")} className={cn(buttonBase, "text-paper-3 hover:bg-paper/[0.08] hover:text-paper")}>
-                      <Archive className="size-3.5" aria-hidden="true" />
-                      Archive
-                    </button>
-                  ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

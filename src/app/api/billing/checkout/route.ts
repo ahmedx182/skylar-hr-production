@@ -16,6 +16,7 @@ import {
   setStripeCustomerForCompany,
 } from "@/server/repositories/billing.repository";
 import { stripe } from "@/server/stripe/client";
+import { isMissingInStripe } from "@/server/stripe/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -36,17 +37,23 @@ export async function POST(request: Request) {
     }
     const client = stripe();
     const appUrl = getServerEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-    const customerId =
-      billing.stripeCustomerId ??
-      (
+    let customerId = billing.stripeCustomerId;
+    if (customerId) {
+      // An id saved under test keys doesn't exist under live keys. Start a fresh customer instead of failing checkout.
+      const known = await client.customers.retrieve(customerId).catch((error: unknown) => {
+        if (isMissingInStripe(error)) return null;
+        throw error;
+      });
+      if (!known || known.deleted) customerId = null;
+    }
+    if (!customerId) {
+      customerId = (
         await client.customers.create({
           email: session.email ?? undefined,
           name: session.companyName ?? undefined,
           metadata: { companyId: session.companyId },
         })
       ).id;
-
-    if (!billing.stripeCustomerId) {
       await setStripeCustomerForCompany(session, customerId);
     }
 
@@ -72,7 +79,7 @@ export async function POST(request: Request) {
       automatic_tax: { enabled: false },
       // Stripe's default Managed Payments makes Stripe the merchant of record and rejects automatic_tax off.
       managed_payments: { enabled: false },
-      allow_promotion_codes: false,
+      allow_promotion_codes: true,
       payment_method_collection: "always",
       submit_type: "auto",
       integration_identifier: "hosted_web_0001",

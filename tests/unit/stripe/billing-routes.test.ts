@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const customersCreate = vi.fn();
+const customersRetrieve = vi.fn();
 const checkoutCreate = vi.fn();
 const portalCreate = vi.fn();
 const getBilling = vi.fn();
@@ -15,7 +16,7 @@ vi.mock("@/lib/env/server", () => ({
 }));
 vi.mock("@/server/stripe/client", () => ({
   stripe: () => ({
-    customers: { create: customersCreate },
+    customers: { create: customersCreate, retrieve: customersRetrieve },
     checkout: { sessions: { create: checkoutCreate } },
     billingPortal: { sessions: { create: portalCreate } },
   }),
@@ -68,6 +69,7 @@ describe("POST /api/billing/checkout", () => {
     getBilling.mockResolvedValue(freeBilling);
     getPackage.mockResolvedValue(professional);
     customersCreate.mockResolvedValue({ id: "cus_1" });
+    customersRetrieve.mockResolvedValue({ id: "cus_existing" });
     checkoutCreate.mockResolvedValue({ id: "cs_1", url: "https://checkout.stripe.com/c/cs_1" });
   });
 
@@ -101,6 +103,29 @@ describe("POST /api/billing/checkout", () => {
 
     expect(customersCreate).not.toHaveBeenCalled();
     expect(checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_existing" }));
+  });
+
+  it("starts a fresh customer when the saved one isn't on this Stripe account", async () => {
+    getBilling.mockResolvedValue({ ...freeBilling, stripeCustomerId: "cus_from_test_mode" });
+    customersRetrieve.mockRejectedValue(Object.assign(new Error("No such customer"), { code: "resource_missing" }));
+
+    const response = await checkout(checkoutRequest());
+
+    expect(response.status).toBe(200);
+    expect(customersCreate).toHaveBeenCalledTimes(1);
+    expect(setCustomer).toHaveBeenCalledWith(admin, "cus_1");
+    expect(checkoutCreate).toHaveBeenCalledWith(expect.objectContaining({ customer: "cus_1" }));
+  });
+
+  it("doesn't create a second customer when Stripe merely fails to answer", async () => {
+    getBilling.mockResolvedValue({ ...freeBilling, stripeCustomerId: "cus_existing" });
+    customersRetrieve.mockRejectedValue(new Error("network down"));
+
+    const response = await checkout(checkoutRequest());
+
+    expect(response.status).toBe(500);
+    expect(customersCreate).not.toHaveBeenCalled();
+    expect(checkoutCreate).not.toHaveBeenCalled();
   });
 
   it("refuses to create a second subscription for a workspace that already has one", async () => {
@@ -209,6 +234,15 @@ describe("POST /api/billing/portal", () => {
       customer: "cus_1",
       return_url: "https://app.example.com/billing",
     });
+  });
+
+  it("explains when the saved customer belongs to the other Stripe mode", async () => {
+    getBilling.mockResolvedValue({ ...freeBilling, stripeCustomerId: "cus_from_test_mode" });
+    portalCreate.mockRejectedValue(Object.assign(new Error("No such customer"), { code: "resource_missing" }));
+
+    const response = await portal(post("/api/billing/portal"));
+
+    expect(response.status).toBe(409);
   });
 
   it("returns 409 when billing was never started", async () => {

@@ -8,6 +8,7 @@ import { assertSameOrigin } from "@/server/guards/same-origin";
 import { errorResponse } from "@/server/http/error-response";
 import { getOrCreateCompanyBillingState } from "@/server/repositories/billing.repository";
 import { stripe } from "@/server/stripe/client";
+import { isMissingInStripe } from "@/server/stripe/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,17 @@ export async function POST(request: Request) {
     }
 
     const appUrl = getServerEnv().NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-    const portal = await stripe().billingPortal.sessions.create({
-      customer: billing.stripeCustomerId,
-      return_url: `${appUrl}${BILLING_PATH}`,
-    });
+    const portal = await stripe()
+      .billingPortal.sessions.create({
+        customer: billing.stripeCustomerId,
+        return_url: `${appUrl}${BILLING_PATH}`,
+      })
+      .catch((error: unknown) => {
+        if (isMissingInStripe(error)) {
+          throw new ConflictError("This workspace's billing profile isn't on the current Stripe account. Contact support to move it across.");
+        }
+        throw error;
+      });
 
     return NextResponse.json({ url: portal.url });
   } catch (error) {

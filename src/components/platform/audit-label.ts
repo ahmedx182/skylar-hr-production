@@ -31,6 +31,10 @@ const labels: Record<PlatformAction, string> = {
   package_update: "Updated package",
   package_archive: "Archived package",
   package_restore: "Restored package",
+  package_promo_create: "Created promo code",
+  package_promo_replace: "Replaced promo code",
+  package_promo_activate: "Turned on promo code",
+  package_promo_deactivate: "Turned off promo code",
 };
 
 export function auditActionLabel(action: PlatformAction): string {

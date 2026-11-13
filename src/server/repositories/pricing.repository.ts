@@ -16,7 +16,15 @@ import type { AuthSession } from "@/types/auth";
 export const PACKAGES_COLLECTION = "pricing_packages";
 export const AUDIT_COLLECTION = "platform_audit_log";
 
-export type PackageAuditAction = "package_create" | "package_update" | "package_archive" | "package_restore";
+export type PackageAuditAction =
+  | "package_create"
+  | "package_update"
+  | "package_archive"
+  | "package_restore"
+  | "package_promo_create"
+  | "package_promo_replace"
+  | "package_promo_activate"
+  | "package_promo_deactivate";
 
 function ms(value: unknown): number | null {
   return value && typeof value === "object" && "toMillis" in value && typeof value.toMillis === "function"
@@ -144,32 +152,6 @@ function describePriceChange(before: PricingPackage, after: PricingPackageInput)
   return changes.length ? changes.join(", ") : null;
 }
 
-export async function createPackage(input: PricingPackageInput, actor: Pick<AuthSession, "uid" | "email">): Promise<PricingPackage> {
-  await seedDefaultsIfEmpty();
-  const db = adminDb();
-  const ref = db.collection(PACKAGES_COLLECTION).doc();
-  const batch = db.batch();
-  batch.set(ref, {
-    ...input,
-    archived: false,
-    stripeProductId: null,
-    stripePriceId: null,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  batch.set(
-    db.collection(AUDIT_COLLECTION).doc(),
-    auditEntry({
-      action: "package_create",
-      pkg: { id: ref.id, name: input.name },
-      actor,
-      detail: `${input.priceCents / 100} USD per ${input.interval}`,
-    }),
-  );
-  await batch.commit();
-  return packageFromDoc(await ref.get());
-}
-
 export async function updatePackage(
   id: string,
   input: PricingPackageInput,
@@ -221,4 +203,30 @@ export async function setPackageArchived(
 
 export async function attachStripeIds(id: string, ids: { stripeProductId: string; stripePriceId: string }): Promise<void> {
   await adminDb().collection(PACKAGES_COLLECTION).doc(id).set({ ...ids, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+}
+
+const PROMO_CHANGE_ACTION = {
+  create: "package_promo_create",
+  replace: "package_promo_replace",
+  activate: "package_promo_activate",
+  deactivate: "package_promo_deactivate",
+} as const;
+
+const PROMO_CHANGE_DETAIL = {
+  create: null,
+  replace: null,
+  activate: "Customers can enter this code at checkout.",
+  deactivate: "Customers can no longer enter this code. Existing discounts stay.",
+} as const;
+
+/** Stripe owns promo codes; the audit log is the only place this console remembers who created, replaced or switched one. */
+export async function recordPromotionCodeChange(
+  promotionCode: { id: string; code: string },
+  change: keyof typeof PROMO_CHANGE_ACTION,
+  actor: Pick<AuthSession, "uid" | "email">,
+  detail: string | null = PROMO_CHANGE_DETAIL[change],
+): Promise<void> {
+  await adminDb()
+    .collection(AUDIT_COLLECTION)
+    .add(auditEntry({ action: PROMO_CHANGE_ACTION[change], pkg: { id: promotionCode.id, name: promotionCode.code }, actor, detail }));
 }
