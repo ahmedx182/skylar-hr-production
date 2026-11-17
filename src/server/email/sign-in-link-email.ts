@@ -80,7 +80,7 @@ export function buildSignInEmail({
           </tr>
           <tr>
             <td style="background:#15151B;border-radius:20px;border:1px solid #26262E;padding:36px 32px;">
-              <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#F5AD44;">${isSignup ? "Verify your email" : "Passwordless sign-in"}</p>
+              <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#F5AD44;">${isSignup ? "Verify your email" : "No password needed"}</p>
               <h1 style="margin:0 0 14px;font-size:26px;line-height:1.25;font-weight:700;color:#F2EFE8;">${escapeHtml(heading)}</h1>
               <p style="margin:0 0 28px;font-size:15px;line-height:1.65;color:#B4B0A6;">${escapeHtml(intro)}</p>
               <table role="presentation" cellpadding="0" cellspacing="0">

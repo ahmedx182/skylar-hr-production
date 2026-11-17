@@ -100,3 +100,19 @@ Do not write any of these until confirmed:
 - Signup and billing already follow the flow in `PROJECT_MEMORY.md` (verified email, any domain, admin team invites). Copy that says "free forever" or "5 advisor messages" is stale against the new offer. The product may also need a trial and escalation-count mechanism before the offer is true. See `live-advisor-escalation-plan.md`, which holds the current escalation design.
 - Pages in scope: landing, `/signup`, `/login`, pricing and billing surfaces.
 - The doc did not re-audit the site or product. Verify each claim against the shipped behavior before publishing.
+
+## November 13 Working Revision (Latest Landing Page Update)
+
+Based on the Nov 11 Granola session with Jonathan and Lauren's written brief:
+- **Lead with "Try it free"**: Primary CTA shortened to `Try it free`, with 14-day details moved to supporting copy below the button.
+- **AI/Human Distinction**: Highlighted in the Hero (`An (AI) colleague to think with. A (human) professional to turn to.`) and throughout the copy.
+- **Section Order & Reorganization**:
+  1. Hero (hook)
+  2. The problem, then the difference (comparison; strikethrough removed for clean readability)
+  3. What Skylar does and how it works (combined product introduction & 3-step how-it-works)
+  4. Workflow detail, lower on the page (relocated dialogue, records, and sign-in proof items)
+  5. Trial and paid plan cards ($149/mo paid plan)
+  6. Short FAQs (4 consolidated questions)
+  7. Closing invitation
+- **Page Edits**: Standalone floating HR Support escalation box removed from the hero (human support integrated into the hero copy, step 3 of how-it-works, and trial details).
+- **Customer-facing Phrasing**: Use "No password needed" instead of "Passwordless sign-in" across the landing page and email templates.
